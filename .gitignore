@@ -14,12 +14,17 @@
 # next.js
 /.next/
 /out/
+.turbo/
+.vercel/
 
 # production
 /build
 
 # misc
 .DS_Store
+.idea/
+.vscode/
+*.swp
 *.pem
 
 # debug
@@ -30,6 +35,8 @@ pnpm-debug.log*
 
 # env files
 .env*.local
+.env
+brief.md
 
 # typescript
 *.tsbuildinfo
