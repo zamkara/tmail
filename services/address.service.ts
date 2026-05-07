@@ -32,6 +32,8 @@ export function generateAddressLocally(domainId: string, domainName: string): Ge
     id: `local_${Date.now()}`,
     address: `${random}@${domainName}`,
     domainId,
+    domainName,
+    username: null,
     createdAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
   }

@@ -12,6 +12,8 @@ export interface GeneratedAddress {
   id: string
   address: string
   domainId: string
+  domainName: string
+  username: string | null
   createdAt: string
   expiresAt: string
 }

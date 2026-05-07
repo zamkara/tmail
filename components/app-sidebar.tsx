@@ -31,7 +31,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { useAddressStore } from "@/stores/address.store"
 import { useInboxStore } from "@/stores/inbox.store"
-import type { EmailItem } from "@/types"
+import type { EmailItem, GeneratedAddress } from "@/types"
 
 const navMain = [
   { title: "Inbox", url: "/inbox", icon: <InboxIcon /> },
@@ -44,7 +44,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [unreadOnly, setUnreadOnly] = React.useState(false)
   const [search, setSearch] = React.useState("")
   const [isRefreshing, setIsRefreshing] = React.useState(false)
-  const params = useParams<{ addressId?: string }>()
+  const params = useParams<{ slug?: string[] }>()
   const pathname = usePathname()
   const router = useRouter()
   const addresses = useAddressStore((s) => s.addresses)
@@ -61,16 +61,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const isInboxFolder = activeItem.url === "/inbox"
 
-  const activeAddress = addresses.find((a) => a.id === (params.addressId ?? activeAddressId))
+  const activeAddress = resolveActiveAddress(addresses, params, activeAddressId)
 
-  async function fetchEmails(address: string, addressId: string) {
+  async function fetchEmails(address: string, addr: GeneratedAddress) {
     try {
       const res = await fetch(`/api/inbox?address=${encodeURIComponent(address)}`)
       const data = await res.json() as { messages: Array<{ id: string; from: string; subject: string; timestamp: number }> }
       setEmails(
         (data.messages ?? []).map((m) => ({
           id: m.id,
-          addressId,
+          addressId: buildInboxHref(addr),
           from: parseFrom(m.from),
           subject: m.subject || "(tanpa subjek)",
           receivedAt: new Date(m.timestamp).toISOString(),
@@ -85,7 +85,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   React.useEffect(() => {
     if ((isInboxFolder || activeItem.url === "/inbox/junk" || activeItem.url === "/inbox/trash") && activeAddress) {
-      void fetchEmails(activeAddress.address, activeAddress.id)
+      void fetchEmails(activeAddress.address, activeAddress)
     } else {
       setEmails([])
     }
@@ -94,7 +94,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   async function handleRefresh() {
     if (!activeAddress) return
     setIsRefreshing(true)
-    await fetchEmails(activeAddress.address, activeAddress.id)
+    await fetchEmails(activeAddress.address, activeAddress)
     setIsRefreshing(false)
   }
 
@@ -151,7 +151,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       tooltip={{ children: item.title, hidden: false }}
                       isActive={activeItem?.title === item.title}
                       className="px-2.5 md:px-2"
-                      onClick={() => router.push(item.url)}
+                      onClick={() => {
+                        if (activeAddress) {
+                          const folder = item.url === "/inbox" ? buildInboxHref(activeAddress) : `${buildInboxHref(activeAddress)}/${item.url.replace("/inbox/", "")}`
+                          router.push(folder)
+                        } else {
+                          router.push(item.url)
+                        }
+                      }}
                     >
                       {item.icon}
                       <span>{item.title}</span>
@@ -216,7 +223,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 filtered.map((email) => (
                   <EmailContextMenu key={email.id} email={email}>
                     <Link
-                      href={`/inbox/${email.addressId}/${email.id}`}
+                      href={`${email.addressId}/${email.id}`}
                       className="flex min-w-0 flex-col items-start gap-2 overflow-hidden border-b p-4 text-sm leading-tight last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                     >
                       <div className="flex w-full min-w-0 items-center gap-2">
@@ -234,6 +241,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </Sidebar>
     </Sidebar>
   )
+}
+
+function resolveActiveAddress(
+  addresses: GeneratedAddress[],
+  params: { slug?: string[] },
+  activeAddressId: string | null
+) {
+  const slug = params.slug
+  if (slug?.length === 2) {
+    const [username, domain] = slug
+    return addresses.find(
+      (a) => a.username === username && a.domainName === domain
+    )
+  }
+  if (slug?.length === 1) {
+    return addresses.find((a) => a.id === slug[0]) ?? null
+  }
+  return addresses.find((a) => a.id === activeAddressId) ?? null
+}
+
+function buildInboxHref(address: GeneratedAddress) {
+  return address.username
+    ? `/inbox/${address.username}/${address.domainName}`
+    : `/inbox/${address.id}`
 }
 
 function parseFrom(from: string) {

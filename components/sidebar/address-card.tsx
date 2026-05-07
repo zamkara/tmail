@@ -32,9 +32,8 @@ export default function AddressCard({
   const activeAddressId = useAddressStore((state) => state.activeAddressId)
   const isActive = activeAddressId === address.id
 
-  // Pertahankan folder aktif saat pindah address
   const activeFolder = FOLDER_PATHS.find((f) => pathname.startsWith(f)) ?? "/inbox"
-  const href = `${activeFolder}/${address.id}`
+  const href = buildInboxHref(address, activeFolder)
 
   return (
     <SidebarMenuItem>
@@ -65,4 +64,11 @@ export default function AddressCard({
       </SidebarMenuButton>
     </SidebarMenuItem>
   )
+}
+
+function buildInboxHref(address: GeneratedAddress, folder: string) {
+  const base = address.username
+    ? `/inbox/${address.username}/${address.domainName}`
+    : `/inbox/${address.id}`
+  return folder === "/inbox" ? base : `${base}/${folder.replace("/inbox/", "")}`
 }

@@ -34,7 +34,7 @@ import { useAddressStore } from "@/stores/address.store"
 import { useDomainStore } from "@/stores/domain.store"
 import { useAuthStore } from "@/stores/auth.store"
 import { useInboxStore } from "@/stores/inbox.store"
-import type { Domain } from "@/types"
+import type { Domain, GeneratedAddress } from "@/types"
 
 interface AddressSidebarContextValue {
   open: boolean
@@ -227,6 +227,7 @@ function CollapsedAddressRail() {
       <div className="flex flex-col items-center gap-1">
         {sortedAddresses.map((address) => {
           const isActive = activeAddressId === address.id
+          const href = buildInboxHref(address, activeFolder)
 
           return (
             <Tooltip key={address.id}>
@@ -238,7 +239,7 @@ function CollapsedAddressRail() {
                   className={cn(isActive && "bg-sidebar-accent")}
                 >
                   <Link
-                    href={`${activeFolder}/${address.id}`}
+                    href={href}
                     onClick={() => setActiveAddress(address.id)}
                   >
                     <Avatar size="sm">
@@ -256,6 +257,13 @@ function CollapsedAddressRail() {
       </div>
     </div>
   )
+}
+
+function buildInboxHref(address: GeneratedAddress, folder: string) {
+  const base = address.username
+    ? `/inbox/${address.username}/${address.domainName}`
+    : `/inbox/${address.id}`
+  return folder === "/inbox" ? base : `${base}/${folder.replace("/inbox/", "")}`
 }
 
 function CollapsedDomainButton({ domain }: { domain: Domain }) {

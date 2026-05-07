@@ -40,6 +40,11 @@ import { cn } from "@/lib/utils"
 
 const domainPattern = /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/
 
+const MAIL_SERVER_HOST =
+  process.env.NEXT_PUBLIC_MAIL_SERVER_HOST ?? ""
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL ?? ""
+
 interface AddDomainDialogProps {
   iconOnly?: boolean
   className?: string
@@ -122,9 +127,10 @@ export default function AddDomainDialog({
 
         <section className="flex flex-col gap-3 rounded-lg border bg-muted/40 p-3 text-sm">
           <div className="flex flex-col gap-1">
-            <h3 className="font-medium">Method 1</h3>
+            <h3 className="font-medium">Cara 1 — Setup MX Record sendiri</h3>
             <p className="text-muted-foreground">
-              Daftarkan domain sendiri, lalu arahkan MX record ke mail server.
+              Daftarkan domain sendiri, lalu arahkan MX record ke mail server{" "}
+              <code className="rounded bg-muted px-1 text-xs">{MAIL_SERVER_HOST}</code>.
             </p>
           </div>
           <ol className="ml-4 flex list-decimal flex-col gap-2">
@@ -139,24 +145,29 @@ export default function AddDomainDialog({
             <p>Record Type: MX</p>
             <p>TTL: 86400</p>
             <p>Priority: 1</p>
-            <p>Mail server: generator.email.</p>
+            <p>Mail server: {MAIL_SERVER_HOST}</p>
           </div>
           <ol className="ml-4 flex list-decimal flex-col gap-2" start={4}>
             <li>Tunggu perubahan DNS aktif, biasanya 1 menit sampai 1 hari.</li>
-            <li>Gunakan format https://generator.email/your-domain.com</li>
+            <li>
+              Akses inbox:{" "}
+              <code className="rounded bg-muted px-1">
+                {APP_URL}/[nama-domain]
+              </code>
+            </li>
           </ol>
         </section>
 
         <section className="flex flex-col gap-3 rounded-lg border bg-muted/40 p-3 text-sm">
           <div className="flex flex-col gap-1">
-            <h3 className="font-medium">Method 2</h3>
+            <h3 className="font-medium">Cara 2 — Minta bantuan setup</h3>
             <p className="text-muted-foreground">
               Hubungi support jika ingin dibantu proses setup DNS.
             </p>
           </div>
           <ol className="ml-4 flex list-decimal flex-col gap-2">
             <li>Daftarkan domain yang kamu inginkan.</li>
-            <li>Kirim Feedback dengan subject “New Domain”.</li>
+            <li>Kirim Feedback dengan subject &ldquo;New Domain&rdquo;.</li>
             <li>
               Sertakan site registrar, username atau email akun, dan domain
               name.
@@ -188,10 +199,10 @@ export default function AddDomainDialog({
             onSubmit={(event) => void handleSubmit(event)}
           >
             <DrawerHeader>
-              <DrawerTitle>New Email Generator domain name</DrawerTitle>
+              <DrawerTitle>Tambah domain custom</DrawerTitle>
               <DrawerDescription>
-                Tambahkan domain dan arahkan MX record ke server email
-                generator.
+                Masukkan domain dan arahkan MX record ke{" "}
+                <code className="rounded bg-muted px-1 text-xs">{MAIL_SERVER_HOST}</code>.
               </DrawerDescription>
             </DrawerHeader>
             <Separator />
@@ -212,10 +223,11 @@ export default function AddDomainDialog({
           onSubmit={(event) => void handleSubmit(event)}
         >
           <DialogHeader className="p-4 pb-3">
-            <DialogTitle>New Email Generator domain name</DialogTitle>
+            <DialogTitle>Tambah domain custom</DialogTitle>
             <DialogDescription>
               Masukkan domain yang akan dipakai untuk disposable email, lalu
-              arahkan MX record domain ke server email generator.
+              arahkan MX record ke{" "}
+              <code className="rounded bg-muted px-1 text-xs">{MAIL_SERVER_HOST}</code>.
             </DialogDescription>
           </DialogHeader>
           <Separator />

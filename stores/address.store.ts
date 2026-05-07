@@ -8,6 +8,7 @@ interface AddressStore {
   activeAddressId: string | null
   isLoaded: boolean
   setAddresses: (addresses: GeneratedAddress[]) => void
+  setLoaded: () => void
   addAddress: (address: GeneratedAddress) => void
   setActiveAddress: (id: string | null) => void
   removeExpired: () => void
@@ -20,6 +21,7 @@ export const useAddressStore = create<AddressStore>()(
       activeAddressId: null,
       isLoaded: false,
       setAddresses: (addresses) => set({ addresses, isLoaded: true }),
+      setLoaded: () => set({ isLoaded: true }),
       addAddress: (address) =>
         set((state) => ({
           addresses: [
@@ -37,6 +39,6 @@ export const useAddressStore = create<AddressStore>()(
           ),
         })),
     }),
-    { name: "tmail-addresses" }
+    { name: "tmail-addresses-v2" }
   )
 )

@@ -11,7 +11,6 @@ import {
   MailIcon,
   UserIcon,
 } from "lucide-react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
@@ -43,7 +42,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldGroup,
+  FieldDescription,
+  FieldLabel,
+} from "@/components/ui/field"
+import { getGravatarUrl } from "@/lib/gravatar"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
@@ -53,25 +58,63 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { logout } from "@/services/auth.service"
+import { Spinner } from "@/components/ui/spinner"
+import { login, register, logout } from "@/services/auth.service"
+import { useAddressStore } from "@/stores/address.store"
 import { useAuthStore } from "@/stores/auth.store"
 
 export function NavUser() {
   const { isMobile } = useSidebar()
   const authUser = useAuthStore((s) => s.user)
   const setUser = useAuthStore((s) => s.setUser)
+  const setAddresses = useAddressStore((s) => s.setAddresses)
   const router = useRouter()
   const [preferenceOpen, setPreferenceOpen] = React.useState(false)
   const [notificationsOpen, setNotificationsOpen] = React.useState(false)
+  const [authDialogOpen, setAuthDialogOpen] = React.useState(false)
+  const [authMode, setAuthMode] = React.useState<"signin" | "signup">("signin")
+  const [authLoading, setAuthLoading] = React.useState(false)
 
   const user = authUser
-    ? { name: authUser.name, email: authUser.email, avatar: "" }
+    ? {
+        name: authUser.name,
+        email: authUser.email,
+        avatar: getGravatarUrl(authUser.email, 80),
+      }
     : { name: "Guest", email: "Tanpa akun", avatar: "" }
+
+  async function handleAuthSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = new FormData(e.currentTarget)
+    const email = form.get("email") as string
+    const password = form.get("password") as string
+
+    setAuthLoading(true)
+    try {
+      if (authMode === "signup") {
+        const name = form.get("name") as string
+        const created = await register(name, email, password)
+        setUser(created)
+      } else {
+        const loggedIn = await login(email, password)
+        setUser(loggedIn)
+      }
+      setAuthDialogOpen(false)
+      toast.success(
+        authMode === "signup" ? "Akun berhasil dibuat" : "Berhasil masuk"
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Terjadi kesalahan")
+    } finally {
+      setAuthLoading(false)
+    }
+  }
 
   async function handleLogout() {
     await logout()
     setUser(null)
-    router.push("/signin")
+    setAddresses([])
+    router.push("/inbox")
     toast.success("Berhasil keluar")
   }
 
@@ -126,7 +169,9 @@ export function NavUser() {
                       <UserIcon />
                       Preference
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setNotificationsOpen(true)}>
+                    <DropdownMenuItem
+                      onSelect={() => setNotificationsOpen(true)}
+                    >
                       <BellIcon />
                       Notifications
                     </DropdownMenuItem>
@@ -139,11 +184,23 @@ export function NavUser() {
                 </>
               ) : (
                 <DropdownMenuGroup>
-                  <DropdownMenuItem asChild>
-                    <Link href="/signin">
-                      <LogInIcon />
-                      Masuk / Daftar
-                    </Link>
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      setAuthMode("signin")
+                      setAuthDialogOpen(true)
+                    }}
+                  >
+                    <LogInIcon />
+                    Masuk
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      setAuthMode("signup")
+                      setAuthDialogOpen(true)
+                    }}
+                  >
+                    <UserIcon />
+                    Daftar
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
               )}
@@ -151,6 +208,15 @@ export function NavUser() {
           </DropdownMenu>
         </SidebarMenuItem>
       </SidebarMenu>
+      <AuthDialog
+        open={authDialogOpen}
+        onOpenChange={setAuthDialogOpen}
+        mode={authMode}
+        onModeChange={setAuthMode}
+        loading={authLoading}
+        onSubmit={handleAuthSubmit}
+        isMobile={isMobile}
+      />
       <PreferenceSurface
         open={preferenceOpen}
         onOpenChange={setPreferenceOpen}
@@ -166,7 +232,147 @@ export function NavUser() {
   )
 }
 
-function PreferenceContent({ user }: { user: { name: string; email: string; avatar: string } }) {
+function AuthForm({
+  mode,
+  onModeChange,
+  loading,
+  onSubmit,
+}: {
+  mode: "signin" | "signup"
+  onModeChange: (mode: "signin" | "signup") => void
+  loading: boolean
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
+}) {
+  const isSignup = mode === "signup"
+
+  return (
+    <form onSubmit={onSubmit}>
+      <div className="px-4 pb-4">
+        <FieldGroup>
+          {isSignup && (
+            <Field>
+              <FieldLabel htmlFor="auth-name">Nama</FieldLabel>
+              <Input
+                id="auth-name"
+                name="name"
+                type="text"
+                placeholder="Nama lengkap"
+                required
+              />
+            </Field>
+          )}
+          <Field>
+            <FieldLabel htmlFor="auth-email">Email</FieldLabel>
+            <Input
+              id="auth-email"
+              name="email"
+              type="email"
+              placeholder="m@example.com"
+              required
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="auth-password">Password</FieldLabel>
+            <Input
+              id="auth-password"
+              name="password"
+              type="password"
+              required
+              minLength={8}
+            />
+          </Field>
+        </FieldGroup>
+      </div>
+      <div className="flex flex-col gap-3 px-4 pb-4">
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? <Spinner /> : isSignup ? "Daftar" : "Masuk"}
+        </Button>
+        <FieldDescription className="text-center">
+          {isSignup ? "Sudah punya akun?" : "Belum punya akun?"}{" "}
+          <button
+            type="button"
+            className="underline underline-offset-4 hover:text-foreground"
+            onClick={() => onModeChange(isSignup ? "signin" : "signup")}
+          >
+            {isSignup ? "Masuk" : "Daftar"}
+          </button>
+        </FieldDescription>
+      </div>
+    </form>
+  )
+}
+
+function AuthDialog({
+  open,
+  onOpenChange,
+  mode,
+  onModeChange,
+  loading,
+  onSubmit,
+  isMobile,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  mode: "signin" | "signup"
+  onModeChange: (mode: "signin" | "signup") => void
+  loading: boolean
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
+  isMobile: boolean
+}) {
+  const isSignup = mode === "signup"
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange}>
+        <DrawerContent>
+          <DrawerHeader className="px-4 pt-4">
+            <DrawerTitle>
+              {isSignup ? "Buat akun" : "Selamat datang"}
+            </DrawerTitle>
+            <DrawerDescription>
+              {isSignup
+                ? "Daftar dengan email dan password"
+                : "Masuk dengan email dan password"}
+            </DrawerDescription>
+          </DrawerHeader>
+          <AuthForm
+            mode={mode}
+            onModeChange={onModeChange}
+            loading={loading}
+            onSubmit={onSubmit}
+          />
+        </DrawerContent>
+      </Drawer>
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="p-0 sm:max-w-md">
+        <DialogHeader className="px-4 pt-4">
+          <DialogTitle>{isSignup ? "Buat akun" : "Selamat datang"}</DialogTitle>
+          <DialogDescription>
+            {isSignup
+              ? "Daftar dengan email dan password"
+              : "Masuk dengan email dan password"}
+          </DialogDescription>
+        </DialogHeader>
+        <AuthForm
+          mode={mode}
+          onModeChange={onModeChange}
+          loading={loading}
+          onSubmit={onSubmit}
+        />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function PreferenceContent({
+  user,
+}: {
+  user: { name: string; email: string; avatar: string }
+}) {
   return (
     <form className="flex flex-col gap-4">
       <FieldGroup>
@@ -277,7 +483,7 @@ function NotificationsSurface({
           <DialogTitle>Notifications</DialogTitle>
           <DialogDescription>Daftar notifikasi akun.</DialogDescription>
         </DialogHeader>
-        <ScrollArea className="max-h-[420px] px-4 pb-4">{content}</ScrollArea>
+        <ScrollArea className="max-h-105 px-4 pb-4">{content}</ScrollArea>
       </DialogContent>
     </Dialog>
   )

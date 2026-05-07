@@ -4,6 +4,7 @@ import { getAuthUser } from "@/lib/auth"
 import { connectDB } from "@/lib/db"
 import { Address } from "@/models/address.model"
 import { Domain } from "@/models/domain.model"
+import { User } from "@/models/user.model"
 
 // GET /api/addresses — ambil semua address milik user yang belum expired
 export async function GET() {
@@ -11,6 +12,9 @@ export async function GET() {
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   await connectDB()
+
+  const user = await User.findById(auth.userId)
+  if (!user) return NextResponse.json({ error: "User tidak ditemukan" }, { status: 404 })
 
   const addresses = await Address.find({
     userId: auth.userId,
@@ -22,6 +26,8 @@ export async function GET() {
       id: a._id.toString(),
       address: a.address,
       domainId: a.domainId.toString(),
+      domainName: a.address.split("@")[1] ?? "",
+      username: slugify(user.name),
       createdAt: a.createdAt,
       expiresAt: a.expiresAt,
     }))
@@ -38,12 +44,25 @@ export async function POST(req: Request) {
 
   await connectDB()
 
-  const domain = await Domain.findOne({
-    _id: domainId,
-    $or: [{ type: "system" }, { userId: auth.userId }],
-  })
+  const isSystem = domainId.startsWith("sys_")
+  let domain
+  if (isSystem) {
+    const name = domainId.replace(/^sys_\d+_/, "")
+    domain = await Domain.findOne({ name, type: "system" })
+    if (!domain) {
+      domain = await Domain.create({ name, type: "system", isVerified: true, userId: null })
+    }
+  } else {
+    domain = await Domain.findOne({
+      _id: domainId,
+      $or: [{ type: "system" }, { userId: auth.userId }],
+    })
+  }
 
   if (!domain) return NextResponse.json({ error: "Domain tidak ditemukan" }, { status: 404 })
+
+  const user = await User.findById(auth.userId)
+  if (!user) return NextResponse.json({ error: "User tidak ditemukan" }, { status: 404 })
 
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
   const random = Array.from(
@@ -64,8 +83,17 @@ export async function POST(req: Request) {
   return NextResponse.json({
     id: address._id.toString(),
     address: address.address,
-    domainId: address.domainId.toString(),
+    domainId: isSystem ? domainId : address.domainId.toString(),
+    domainName: domain.name,
+    username: slugify(user.name),
     createdAt: address.createdAt,
     expiresAt: address.expiresAt,
   })
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
 }
