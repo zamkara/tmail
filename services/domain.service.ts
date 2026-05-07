@@ -1,25 +1,18 @@
-import { mockDomains } from "@/mock/domains"
 import type { Domain } from "@/types"
 
-const domainPattern =
-  /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/
-
 export async function getDomains(): Promise<Domain[]> {
-  return Promise.resolve(mockDomains)
+  const res = await fetch("/api/domains")
+  if (!res.ok) throw new Error("Gagal memuat domain")
+  return res.json()
 }
 
 export async function addDomain(name: string): Promise<Domain> {
-  const normalizedName = name.trim().toLowerCase()
-
-  if (!domainPattern.test(normalizedName)) {
-    throw new Error("Format domain tidak valid")
-  }
-
-  return Promise.resolve({
-    id: `dom_custom_${Date.now()}`,
-    name: normalizedName,
-    type: "custom",
-    addedAt: new Date().toISOString(),
-    isVerified: false,
+  const res = await fetch("/api/domains", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
   })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? "Gagal menambah domain")
+  return data
 }

@@ -20,6 +20,8 @@ import { generateAddress } from "@/services/address.service"
 import { getDomains } from "@/services/domain.service"
 import { useAddressStore } from "@/stores/address.store"
 import { useDomainStore } from "@/stores/domain.store"
+import { useAuthStore } from "@/stores/auth.store"
+import { useInboxStore } from "@/stores/inbox.store"
 import { cn } from "@/lib/utils"
 
 interface DomainSectionProps {
@@ -42,6 +44,8 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
   const setDomains = useDomainStore((state) => state.setDomains)
   const addAddress = useAddressStore((state) => state.addAddress)
   const [loadingDomainId, setLoadingDomainId] = useState<string | null>(null)
+  const user = useAuthStore((s) => s.user)
+  const resetInbox = useInboxStore((s) => s.resetInbox)
 
   useEffect(() => {
     if (isLoaded) {
@@ -72,7 +76,8 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
     setLoadingDomainId(domainId)
 
     try {
-      const address = await generateAddress(domainId, domainName)
+      const address = await generateAddress(domainId, domainName, !!user)
+      resetInbox()
       addAddress(address)
       toast.success("Alamat email dibuat")
     } catch {

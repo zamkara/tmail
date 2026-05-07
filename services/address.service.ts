@@ -1,14 +1,26 @@
-import { mockAddresses } from "@/mock/addresses"
 import type { GeneratedAddress } from "@/types"
 
+// Untuk user login: ambil dari API (tersimpan di DB)
 export async function getAddresses(): Promise<GeneratedAddress[]> {
-  return Promise.resolve(mockAddresses)
+  const res = await fetch("/api/addresses")
+  if (!res.ok) throw new Error("Gagal memuat alamat")
+  return res.json()
 }
 
-export async function generateAddress(
-  domainId: string,
-  domainName: string
-): Promise<GeneratedAddress> {
+// Untuk user login: generate via API (tersimpan di DB)
+export async function generateAddressForUser(domainId: string): Promise<GeneratedAddress> {
+  const res = await fetch("/api/addresses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ domainId }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? "Gagal membuat alamat")
+  return data
+}
+
+// Untuk guest: generate lokal, disimpan di localStorage via store
+export function generateAddressLocally(domainId: string, domainName: string): GeneratedAddress {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
   const random = Array.from(
     { length: 6 },
@@ -16,11 +28,21 @@ export async function generateAddress(
   ).join("")
   const now = new Date()
 
-  return Promise.resolve({
-    id: `addr_${Date.now()}`,
+  return {
+    id: `local_${Date.now()}`,
     address: `${random}@${domainName}`,
     domainId,
     createdAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
-  })
+  }
+}
+
+// Fungsi utama yang dipakai komponen — otomatis pilih mode
+export async function generateAddress(
+  domainId: string,
+  domainName: string,
+  isLoggedIn = false
+): Promise<GeneratedAddress> {
+  if (isLoggedIn) return generateAddressForUser(domainId)
+  return generateAddressLocally(domainId, domainName)
 }

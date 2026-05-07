@@ -3,7 +3,7 @@
 import * as React from "react"
 import { AtSignIcon, PanelRightIcon } from "lucide-react"
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { toast } from "sonner"
 
 import AddDomainDialog from "@/components/sidebar/add-domain-dialog"
@@ -32,6 +32,8 @@ import { generateAddress } from "@/services/address.service"
 import { getDomains } from "@/services/domain.service"
 import { useAddressStore } from "@/stores/address.store"
 import { useDomainStore } from "@/stores/domain.store"
+import { useAuthStore } from "@/stores/auth.store"
+import { useInboxStore } from "@/stores/inbox.store"
 import type { Domain } from "@/types"
 
 interface AddressSidebarContextValue {
@@ -158,7 +160,7 @@ export function AddressSidebar() {
 }
 
 function CollapsedAddressRail() {
-  const params = useParams<{ addressId?: string }>()
+  const pathname = usePathname()
   const domains = useDomainStore((state) => state.domains)
   const domainsLoaded = useDomainStore((state) => state.isLoaded)
   const setDomains = useDomainStore((state) => state.setDomains)
@@ -205,6 +207,9 @@ function CollapsedAddressRail() {
       new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()
   )
 
+  const FOLDER_PATHS = ["/inbox/junk", "/inbox/trash"]
+  const activeFolder = FOLDER_PATHS.find((f) => pathname.startsWith(f)) ?? "/inbox"
+
   return (
     <div className="flex min-w-0 flex-col items-center gap-2 p-2">
       <div className="flex flex-col items-center gap-1">
@@ -221,8 +226,7 @@ function CollapsedAddressRail() {
       <Separator />
       <div className="flex flex-col items-center gap-1">
         {sortedAddresses.map((address) => {
-          const isActive =
-            activeAddressId === address.id || params.addressId === address.id
+          const isActive = activeAddressId === address.id
 
           return (
             <Tooltip key={address.id}>
@@ -234,7 +238,7 @@ function CollapsedAddressRail() {
                   className={cn(isActive && "bg-sidebar-accent")}
                 >
                   <Link
-                    href={`/inbox/${address.id}`}
+                    href={`${activeFolder}/${address.id}`}
                     onClick={() => setActiveAddress(address.id)}
                   >
                     <Avatar size="sm">
@@ -257,12 +261,15 @@ function CollapsedAddressRail() {
 function CollapsedDomainButton({ domain }: { domain: Domain }) {
   const [isLoading, setIsLoading] = React.useState(false)
   const addAddress = useAddressStore((state) => state.addAddress)
+  const user = useAuthStore((s) => s.user)
+  const resetInbox = useInboxStore((s) => s.resetInbox)
 
   async function handleGenerate() {
     setIsLoading(true)
 
     try {
-      const address = await generateAddress(domain.id, domain.name)
+      const address = await generateAddress(domain.id, domain.name, !!user)
+      resetInbox()
       addAddress(address)
       toast.success("Alamat email dibuat")
     } catch {

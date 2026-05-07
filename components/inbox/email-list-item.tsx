@@ -1,5 +1,6 @@
 import Link from "next/link"
 
+import EmailContextMenu from "@/components/inbox/email-context-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import type { EmailItem } from "@/types"
 import { cn } from "@/lib/utils"
@@ -42,35 +43,37 @@ export default function EmailListItem({ email }: EmailListItemProps) {
   const senderName = email.from.name ?? email.from.email
 
   return (
-    <Link
-      href={`/inbox/${email.addressId}/${email.id}`}
-      className="flex min-w-0 items-start gap-3 rounded-lg p-3 hover:bg-muted"
-    >
-      <Avatar>
-        <AvatarFallback>{getSenderInitial(email)}</AvatarFallback>
-      </Avatar>
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="flex min-w-0 items-center gap-2">
-          {!email.isRead && (
-            <span className="size-2 rounded-full bg-primary" aria-hidden />
-          )}
-          <span className="truncate text-sm font-medium">{senderName}</span>
-          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-            {formatRelativeTime(email.receivedAt)}
+    <EmailContextMenu email={email}>
+      <Link
+        href={`/inbox/${email.addressId}/${email.id}`}
+        className="flex min-w-0 items-start gap-3 rounded-lg p-3 hover:bg-muted"
+      >
+        <Avatar>
+          <AvatarFallback>{getSenderInitial(email)}</AvatarFallback>
+        </Avatar>
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="flex min-w-0 items-center gap-2">
+            {!email.isRead && (
+              <span className="size-2 rounded-full bg-primary" aria-hidden />
+            )}
+            <span className="truncate text-sm font-medium">{senderName}</span>
+            <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+              {formatRelativeTime(email.receivedAt)}
+            </span>
+          </span>
+          <span
+            className={cn(
+              "truncate text-sm",
+              !email.isRead && "font-semibold"
+            )}
+          >
+            {email.subject}
+          </span>
+          <span className="line-clamp-2 text-sm text-muted-foreground">
+            {email.snippet}
           </span>
         </span>
-        <span
-          className={cn(
-            "truncate text-sm",
-            !email.isRead && "font-semibold"
-          )}
-        >
-          {email.subject}
-        </span>
-        <span className="line-clamp-2 text-sm text-muted-foreground">
-          {email.snippet}
-        </span>
-      </span>
-    </Link>
+      </Link>
+    </EmailContextMenu>
   )
 }

@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { generateAddress } from "@/services/address.service"
 import { useAddressStore } from "@/stores/address.store"
+import { useInboxStore } from "@/stores/inbox.store"
+import { useAuthStore } from "@/stores/auth.store"
 
 interface GenerateAddressButtonProps {
   domainId: string
@@ -24,6 +26,8 @@ export default function GenerateAddressButton({
   const addresses = useAddressStore((state) => state.addresses)
   const addAddress = useAddressStore((state) => state.addAddress)
   const setActiveAddress = useAddressStore((state) => state.setActiveAddress)
+  const resetInbox = useInboxStore((s) => s.resetInbox)
+  const user = useAuthStore((s) => s.user)
 
   async function handleGenerate() {
     const existingAddress = addresses.find(
@@ -41,7 +45,8 @@ export default function GenerateAddressButton({
     setIsLoading(true)
 
     try {
-      const address = await generateAddress(domainId, domainName)
+      const address = await generateAddress(domainId, domainName, !!user)
+      resetInbox()
       addAddress(address)
       setActiveAddress(address.id)
       toast.success("Alamat email dibuat")

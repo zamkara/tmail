@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { MoonIcon, SunIcon } from "lucide-react"
 import { useTheme } from "next-themes"
 
@@ -12,7 +13,11 @@ import {
 
 export default function ModeToggle() {
   const { resolvedTheme, setTheme } = useTheme()
-  const isDark = resolvedTheme === "dark"
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => setMounted(true), [])
+
+  const isDark = mounted && resolvedTheme === "dark"
 
   return (
     <Tooltip>

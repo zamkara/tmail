@@ -6,10 +6,14 @@ import {
   ChevronsUpDownIcon,
   CheckCircle2Icon,
   ClockIcon,
+  LogInIcon,
   LogOutIcon,
   MailIcon,
   UserIcon,
 } from "lucide-react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -49,19 +53,27 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { logout } from "@/services/auth.service"
+import { useAuthStore } from "@/stores/auth.store"
 
-interface NavUserProps {
-  user: {
-    name: string
-    email: string
-    avatar: string
-  }
-}
-
-export function NavUser({ user }: NavUserProps) {
+export function NavUser() {
   const { isMobile } = useSidebar()
+  const authUser = useAuthStore((s) => s.user)
+  const setUser = useAuthStore((s) => s.setUser)
+  const router = useRouter()
   const [preferenceOpen, setPreferenceOpen] = React.useState(false)
   const [notificationsOpen, setNotificationsOpen] = React.useState(false)
+
+  const user = authUser
+    ? { name: authUser.name, email: authUser.email, avatar: "" }
+    : { name: "Guest", email: "Tanpa akun", avatar: "" }
+
+  async function handleLogout() {
+    await logout()
+    setUser(null)
+    router.push("/signin")
+    toast.success("Berhasil keluar")
+  }
 
   return (
     <>
@@ -75,7 +87,9 @@ export function NavUser({ user }: NavUserProps) {
               >
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  <AvatarFallback className="rounded-lg">
+                    {user.name.slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
@@ -94,7 +108,9 @@ export function NavUser({ user }: NavUserProps) {
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                   <Avatar className="h-8 w-8 rounded-lg">
                     <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                    <AvatarFallback className="rounded-lg">
+                      {user.name.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-medium">{user.name}</span>
@@ -103,21 +119,34 @@ export function NavUser({ user }: NavUserProps) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem onSelect={() => setPreferenceOpen(true)}>
-                  <UserIcon />
-                  Preference
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setNotificationsOpen(true)}>
-                  <BellIcon />
-                  Notifications
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <LogOutIcon />
-                Logout
-              </DropdownMenuItem>
+              {authUser ? (
+                <>
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem onSelect={() => setPreferenceOpen(true)}>
+                      <UserIcon />
+                      Preference
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setNotificationsOpen(true)}>
+                      <BellIcon />
+                      Notifications
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => void handleLogout()}>
+                    <LogOutIcon />
+                    Logout
+                  </DropdownMenuItem>
+                </>
+              ) : (
+                <DropdownMenuGroup>
+                  <DropdownMenuItem asChild>
+                    <Link href="/signin">
+                      <LogInIcon />
+                      Masuk / Daftar
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </SidebarMenuItem>
@@ -137,7 +166,7 @@ export function NavUser({ user }: NavUserProps) {
   )
 }
 
-function PreferenceContent({ user }: { user: NavUserProps["user"] }) {
+function PreferenceContent({ user }: { user: { name: string; email: string; avatar: string } }) {
   return (
     <form className="flex flex-col gap-4">
       <FieldGroup>
@@ -171,7 +200,7 @@ function PreferenceSurface({
   open: boolean
   onOpenChange: (open: boolean) => void
   isMobile: boolean
-  user: NavUserProps["user"]
+  user: { name: string; email: string; avatar: string }
 }) {
   if (isMobile) {
     return (

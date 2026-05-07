@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { usePathname } from "next/navigation"
 
 import CountdownBadge from "@/components/shared/countdown-badge"
 import CopyButton from "@/components/shared/copy-button"
@@ -21,15 +21,20 @@ function getAddressInitials(address: string) {
   return localPart.slice(0, 2).toUpperCase()
 }
 
+const FOLDER_PATHS = ["/inbox/junk", "/inbox/trash"]
+
 export default function AddressCard({
   address,
   compact = false,
 }: AddressCardProps) {
-  const params = useParams<{ addressId?: string }>()
+  const pathname = usePathname()
   const setActiveAddress = useAddressStore((state) => state.setActiveAddress)
   const activeAddressId = useAddressStore((state) => state.activeAddressId)
-  const isActive =
-    activeAddressId === address.id || params.addressId === address.id
+  const isActive = activeAddressId === address.id
+
+  // Pertahankan folder aktif saat pindah address
+  const activeFolder = FOLDER_PATHS.find((f) => pathname.startsWith(f)) ?? "/inbox"
+  const href = `${activeFolder}/${address.id}`
 
   return (
     <SidebarMenuItem>
@@ -40,7 +45,7 @@ export default function AddressCard({
         className={cn(compact && "h-10")}
       >
         <Link
-          href={`/inbox/${address.id}`}
+          href={href}
           onClick={() => setActiveAddress(address.id)}
         >
           {compact && (

@@ -1,5 +1,10 @@
-import { cn } from "@/lib/utils"
+"use client"
+
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
+import { toast } from "sonner"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -9,104 +14,91 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Spinner } from "@/components/ui/spinner"
+import { cn } from "@/lib/utils"
+import { login, register } from "@/services/auth.service"
+import { useAuthStore } from "@/stores/auth.store"
 
 export function LoginForm({
   className,
   mode = "signin",
   ...props
-}: React.ComponentProps<"div"> & {
-  mode?: "signin" | "signup"
-}) {
+}: React.ComponentProps<"div"> & { mode?: "signin" | "signup" }) {
   const isSignup = mode === "signup"
+  const router = useRouter()
+  const setUser = useAuthStore((s) => s.setUser)
+  const [isLoading, setIsLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = new FormData(e.currentTarget)
+    const email = form.get("email") as string
+    const password = form.get("password") as string
+
+    setIsLoading(true)
+    try {
+      if (isSignup) {
+        const name = form.get("name") as string
+        const user = await register(name, email, password)
+        setUser(user)
+      } else {
+        const user = await login(email, password)
+        setUser(user)
+      }
+      router.push("/inbox")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Terjadi kesalahan")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card className="overflow-hidden p-0">
         <CardContent className="grid p-0 md:grid-cols-2">
-          <form className="p-6 md:p-8">
+          <form className="p-6 md:p-8" onSubmit={(e) => void handleSubmit(e)}>
             <FieldGroup>
               <div className="flex flex-col items-center gap-2 text-center">
                 <h1 className="text-2xl font-bold">
-                  {isSignup ? "Create an account" : "Welcome back"}
+                  {isSignup ? "Buat akun" : "Selamat datang"}
                 </h1>
                 <p className="text-balance text-muted-foreground">
                   {isSignup
-                    ? "Sign up with your email, username and password"
-                    : "Login with your email or username and password"}
+                    ? "Daftar dengan email dan password"
+                    : "Masuk dengan email dan password"}
                 </p>
               </div>
-              {isSignup ? (
-                <>
-                  <Field>
-                    <FieldLabel htmlFor="email">Email</FieldLabel>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="m@example.com"
-                      required
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="username">Username</FieldLabel>
-                    <Input
-                      id="username"
-                      type="text"
-                      placeholder="username"
-                      autoComplete="username"
-                      required
-                    />
-                  </Field>
-                </>
-              ) : (
+              {isSignup && (
                 <Field>
-                  <FieldLabel htmlFor="identifier">Email or username</FieldLabel>
-                  <Input
-                    id="identifier"
-                    type="text"
-                    placeholder="m@example.com or username"
-                    autoComplete="username"
-                    required
-                  />
+                  <FieldLabel htmlFor="name">Nama</FieldLabel>
+                  <Input id="name" name="name" type="text" placeholder="Nama lengkap" required />
                 </Field>
               )}
               <Field>
-                <div className="flex items-center">
-                  <FieldLabel htmlFor="password">Password</FieldLabel>
-                  <a
-                    href="#"
-                    className="ml-auto text-sm underline-offset-2 hover:underline"
-                  >
-                    Forgot your password?
-                  </a>
-                </div>
-                <Input id="password" type="password" required />
+                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <Input id="email" name="email" type="email" placeholder="m@example.com" required />
               </Field>
               <Field>
-                <Button type="submit">{isSignup ? "Sign up" : "Login"}</Button>
+                <FieldLabel htmlFor="password">Password</FieldLabel>
+                <Input id="password" name="password" type="password" required minLength={8} />
+              </Field>
+              <Field>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? <Spinner /> : isSignup ? "Daftar" : "Masuk"}
+                </Button>
               </Field>
               <FieldDescription className="text-center">
-                {isSignup
-                  ? "Already have an account?"
-                  : "Don’t have an account?"}{" "}
+                {isSignup ? "Sudah punya akun?" : "Belum punya akun?"}{" "}
                 <Link href={isSignup ? "/signin" : "/signup"}>
-                  {isSignup ? "Login" : "Sign up"}
+                  {isSignup ? "Masuk" : "Daftar"}
                 </Link>
               </FieldDescription>
             </FieldGroup>
           </form>
-          <div className="relative hidden bg-muted md:block">
-            <img
-              src="/placeholder.svg"
-              alt="Image"
-              className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
-            />
-          </div>
+          <div className="relative hidden bg-muted md:block" />
         </CardContent>
       </Card>
-      <FieldDescription className="px-6 text-center">
-        By clicking continue, you agree to our <a href="#">Terms of Service</a>{" "}
-        and <a href="#">Privacy Policy</a>.
-      </FieldDescription>
     </div>
   )
 }
