@@ -9,6 +9,7 @@ import { User } from "@/models/user.model"
 export async function POST(req: Request) {
   try {
     const { email, password } = await req.json()
+    const isSecure = new URL(req.url).protocol === "https:"
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email dan password wajib diisi" }, { status: 400 })
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
 
     res.cookies.set(AUTH_COOKIE, token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: isSecure,
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7,
       path: "/",

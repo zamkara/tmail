@@ -17,28 +17,28 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-lazy-mongodb-clipboard-fallback"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-lazy-mongodb-fresh-base"
 
 git checkout -b "$BRANCH_NAME"
 
 git add -A
 
-COMMIT_MSG="fix: Lazy MONGODB_URI check, clipboard fallback for non-HTTPS, deploy.sh error visibility
+COMMIT_MSG="fix: Lazy MONGODB_URI check, clipboard fallback, fresh base image per deploy
 
 Perubahan utama:
-- lib/db.ts: pindah MONGODB_URI check ke dalam connectDB() agar tidak throw saat build time (module evaluation)
+- lib/db.ts: pindah MONGODB_URI check ke dalam connectDB() agar tidak throw saat build time
+- app/api/auth/login/route.ts: cookie secure flag deteksi dari req.url, bukan NODE_ENV
+- app/api/auth/register/route.ts: same fix
 - hooks/use-copy.ts: fallback document.execCommand('copy') untuk non-secure context (HTTP via IP)
-- deploy.sh: tampilkan non-progress lines dari podman build (error/warning tidak ketelen)
+- deploy.sh: hapus base image setiap deploy agar selalu pull fresh
+- deploy.sh: tampilkan non-progress lines dari podman build
 - Containerfile: ENV PORT=8901, copy pnpm-lock.yaml ke runner, CMD pake node langsung
-- deploy.sh: blue-green deploy (temp port → health check → migrate → cleanup)
-- deploy.sh: IP detection via ip -4 addr show / hostname -I / localhost
-- deploy.sh: env-file (.env.local) dan TM_ prefixed vars di-pass ke container
-- deploy.sh: cleanup dangling images pake podman rmi -f
+- deploy.sh: blue-green deploy, IP detection, env-file pass, cleanup dangling images
 
 Testing:
+- [ ] Login → refresh → masih login, bukan guest lagi
 - [ ] next build di container berhasil tanpa MONGODB_URI
-- [ ] Copy email address berhasil via http://<ip>:8901
-- [ ] deploy.sh error messages kelihatan di terminal
+- [ ] Copy clipboard berhasil via HTTP (non-HTTPS)
 "
 
 git commit -m "$COMMIT_MSG"

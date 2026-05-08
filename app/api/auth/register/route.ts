@@ -30,13 +30,15 @@ export async function POST(req: Request) {
 
     const token = await signToken({ userId: user._id.toString(), email: user.email })
 
+    const isSecure = new URL(req.url).protocol === "https:"
+
     const res = NextResponse.json({
       user: { id: user._id.toString(), name: user.name, email: user.email },
     })
 
     res.cookies.set(AUTH_COOKIE, token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: isSecure,
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7, // 7 hari
       path: "/",

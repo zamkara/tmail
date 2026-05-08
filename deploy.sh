@@ -115,4 +115,7 @@ if [ -n "$OLD_IMAGE_ID" ]; then
     podman rmi -f "$OLD_IMAGE_ID" >/dev/null 2>&1 || true
   fi
 fi
+# Remove base image so next deploy pulls fresh
+BASE_IMAGE=$(grep '^FROM ' Containerfile | head -1 | awk '{print $2}')
+podman rmi "$BASE_IMAGE" >/dev/null 2>&1 || true
 ok "Cleanup done"
