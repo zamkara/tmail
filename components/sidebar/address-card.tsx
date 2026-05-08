@@ -7,6 +7,7 @@ import CountdownBadge from "@/components/shared/countdown-badge"
 import CopyButton from "@/components/shared/copy-button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar"
+import { buildInboxFolderHref, getInboxFolderFromPathname } from "@/lib/inbox"
 import { useAddressStore } from "@/stores/address.store"
 import type { GeneratedAddress } from "@/types"
 import { cn } from "@/lib/utils"
@@ -21,8 +22,6 @@ function getAddressInitials(address: string) {
   return localPart.slice(0, 2).toUpperCase()
 }
 
-const FOLDER_PATHS = ["/inbox/junk", "/inbox/trash"]
-
 export default function AddressCard({
   address,
   compact = false,
@@ -32,8 +31,8 @@ export default function AddressCard({
   const activeAddressId = useAddressStore((state) => state.activeAddressId)
   const isActive = activeAddressId === address.id
 
-  const activeFolder = FOLDER_PATHS.find((f) => pathname.startsWith(f)) ?? "/inbox"
-  const href = buildInboxHref(address, activeFolder)
+  const activeFolder = getInboxFolderFromPathname(pathname)
+  const href = buildInboxFolderHref(address, activeFolder)
 
   return (
     <SidebarMenuItem>
@@ -43,10 +42,7 @@ export default function AddressCard({
         size={compact ? "default" : "lg"}
         className={cn(compact && "h-10")}
       >
-        <Link
-          href={href}
-          onClick={() => setActiveAddress(address.id)}
-        >
+        <Link href={href} onClick={() => setActiveAddress(address.id)}>
           {compact && (
             <Avatar size="sm">
               <AvatarFallback>
@@ -64,11 +60,4 @@ export default function AddressCard({
       </SidebarMenuButton>
     </SidebarMenuItem>
   )
-}
-
-function buildInboxHref(address: GeneratedAddress, folder: string) {
-  const base = address.username
-    ? `/inbox/${address.username}/${address.domainName}`
-    : `/inbox/${address.id}`
-  return folder === "/inbox" ? base : `${base}/${folder.replace("/inbox/", "")}`
 }

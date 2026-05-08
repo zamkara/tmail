@@ -29,15 +29,30 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { Switch } from "@/components/ui/switch"
+import {
+  buildInboxFolderHref,
+  buildInboxHref,
+  formatRelativeInboxTime,
+  getInboxFolderFromPathname,
+  mapInboxMessage,
+  resolveActiveAddress,
+} from "@/lib/inbox"
 import { useAddressStore } from "@/stores/address.store"
 import { useInboxStore } from "@/stores/inbox.store"
 import type { EmailItem, GeneratedAddress } from "@/types"
 
 const navMain = [
-  { title: "Inbox", url: "/inbox", icon: <InboxIcon /> },
-  { title: "Junk", url: "/inbox/junk", icon: <ArchiveXIcon /> },
-  { title: "Trash", url: "/inbox/trash", icon: <Trash2Icon /> },
-]
+  { title: "Inbox", folder: "inbox", url: "/inbox", icon: <InboxIcon /> },
+  { title: "Junk", folder: "junk", url: "/inbox/junk", icon: <ArchiveXIcon /> },
+  {
+    title: "Trash",
+    folder: "trash",
+    url: "/inbox/trash",
+    icon: <Trash2Icon />,
+  },
+] as const
+
+const INBOX_POLL_INTERVAL_MS = 5000
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [emails, setEmails] = React.useState<EmailItem[]>([])
@@ -52,44 +67,90 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const readIds = useInboxStore((s) => s.readIds)
   const trashedIds = useInboxStore((s) => s.trashedIds)
   const spamSenders = useInboxStore((s) => s.spamSenders)
+  const emailsRef = React.useRef<EmailItem[]>([])
 
+  const activeFolder = getInboxFolderFromPathname(pathname)
   const activeItem =
-    navMain
-      .slice()
-      .sort((a, b) => b.url.length - a.url.length)
-      .find((item) => pathname === item.url || pathname.startsWith(item.url + "/")) ?? navMain[0]
-
-  const isInboxFolder = activeItem.url === "/inbox"
+    navMain.find((item) => item.folder === activeFolder) ?? navMain[0]
 
   const activeAddress = resolveActiveAddress(addresses, params, activeAddressId)
 
-  async function fetchEmails(address: string, addr: GeneratedAddress) {
-    try {
-      const res = await fetch(`/api/inbox?address=${encodeURIComponent(address)}`)
-      const data = await res.json() as { messages: Array<{ id: string; from: string; subject: string; timestamp: number }> }
-      setEmails(
-        (data.messages ?? []).map((m) => ({
-          id: m.id,
-          addressId: buildInboxHref(addr),
-          from: parseFrom(m.from),
-          subject: m.subject || "(tanpa subjek)",
-          receivedAt: new Date(m.timestamp).toISOString(),
-          isRead: readIds.has(m.id),
-          snippet: "",
-        }))
-      )
-    } catch {
-      toast.error("Gagal memuat email")
-    }
-  }
+  const fetchEmails = React.useCallback(
+    async (address: string, addr: GeneratedAddress, silent = false) => {
+      try {
+        const res = await fetch(
+          `/api/inbox?address=${encodeURIComponent(address)}`,
+          {
+            cache: "no-store",
+          }
+        )
+        if (!res.ok) throw new Error("Gagal memuat email")
+        const data = (await res.json()) as {
+          messages: Array<{
+            id: string
+            from: string
+            subject: string
+            timestamp: number
+          }>
+        }
+        const nextEmails = (data.messages ?? []).map((m) =>
+          mapInboxMessage(m, addr, readIds.has(m.id))
+        )
+        const nextIds = nextEmails.map((email) => email.id).join("|")
+        const currentIds = emailsRef.current.map((email) => email.id).join("|")
+        if (nextIds !== currentIds) {
+          emailsRef.current = nextEmails
+          setEmails(nextEmails)
+        }
+      } catch {
+        if (!silent) toast.error("Gagal memuat email")
+      }
+    },
+    [readIds]
+  )
 
   React.useEffect(() => {
-    if ((isInboxFolder || activeItem.url === "/inbox/junk" || activeItem.url === "/inbox/trash") && activeAddress) {
-      void fetchEmails(activeAddress.address, activeAddress)
-    } else {
+    emailsRef.current = emails
+  }, [emails])
+
+  React.useEffect(() => {
+    if (!activeAddress) {
+      emailsRef.current = []
       setEmails([])
+      return
     }
-  }, [activeAddress?.id, activeItem.url])
+
+    let cancelled = false
+
+    async function refresh(silent = false) {
+      if (!activeAddress || cancelled) return
+      await fetchEmails(activeAddress.address, activeAddress, silent)
+    }
+
+    void refresh()
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        void refresh(true)
+      }
+    }, INBOX_POLL_INTERVAL_MS)
+
+    function handleVisible() {
+      if (document.visibilityState === "visible") {
+        void refresh(true)
+      }
+    }
+
+    window.addEventListener("focus", handleVisible)
+    document.addEventListener("visibilitychange", handleVisible)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+      window.removeEventListener("focus", handleVisible)
+      document.removeEventListener("visibilitychange", handleVisible)
+    }
+  }, [activeAddress, activeItem.folder, fetchEmails])
 
   async function handleRefresh() {
     if (!activeAddress) return
@@ -101,14 +162,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const filtered = emails.filter((e) => {
     const isTrashed = trashedIds.has(e.id)
     const isSpam = spamSenders.has(e.from.email)
-    if (activeItem.url === "/inbox/trash") return isTrashed
-    if (activeItem.url === "/inbox/junk") return !isTrashed && isSpam
+    if (activeItem.folder === "trash") return isTrashed
+    if (activeItem.folder === "junk") return !isTrashed && isSpam
     if (isTrashed || isSpam) return false
     const isRead = readIds.has(e.id)
     if (unreadOnly && isRead) return false
     if (search) {
       const q = search.toLowerCase()
-      return e.subject.toLowerCase().includes(q) || e.from.email.toLowerCase().includes(q)
+      return (
+        e.subject.toLowerCase().includes(q) ||
+        e.from.email.toLowerCase().includes(q)
+      )
     }
     return true
   })
@@ -153,7 +217,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       className="px-2.5 md:px-2"
                       onClick={() => {
                         if (activeAddress) {
-                          const folder = item.url === "/inbox" ? buildInboxHref(activeAddress) : `${buildInboxHref(activeAddress)}/${item.url.replace("/inbox/", "")}`
+                          const folder =
+                            item.folder === "inbox"
+                              ? buildInboxHref(activeAddress)
+                              : buildInboxFolderHref(activeAddress, item.folder)
                           router.push(folder)
                         } else {
                           router.push(item.url)
@@ -175,7 +242,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </Sidebar>
 
       {/* Second panel — email list */}
-      <Sidebar collapsible="none" className="hidden h-full flex-1 overflow-hidden md:flex">
+      <Sidebar
+        collapsible="none"
+        className="hidden h-full flex-1 overflow-hidden md:flex"
+      >
         <SidebarHeader className="gap-3.5 border-b p-4">
           <div className="flex w-full items-center justify-between">
             <div className="text-base font-medium text-foreground">
@@ -213,7 +283,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarGroupContent>
               {filtered.length === 0 ? (
                 <p className="p-4 text-sm text-muted-foreground">
-                  {!isInboxFolder && activeItem.url !== "/inbox/trash"
+                  {activeItem.folder !== "inbox"
                     ? `Folder ${activeItem.title} kosong.`
                     : activeAddress
                       ? "Belum ada email."
@@ -227,11 +297,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       className="flex min-w-0 flex-col items-start gap-2 overflow-hidden border-b p-4 text-sm leading-tight last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                     >
                       <div className="flex w-full min-w-0 items-center gap-2">
-                        <span className="min-w-0 truncate">{email.from.name ?? email.from.email}</span>
-                        <span className="ml-auto shrink-0 text-xs">{formatRelative(email.receivedAt)}</span>
-                    </div>
-                    <span className="w-full truncate font-medium">{email.subject}</span>
-                  </Link>
+                        <span className="min-w-0 truncate">
+                          {email.from.name ?? email.from.email}
+                        </span>
+                        <span className="ml-auto shrink-0 text-xs">
+                          {formatRelativeInboxTime(email.receivedAt)}
+                        </span>
+                      </div>
+                      <span className="w-full truncate font-medium">
+                        {email.subject}
+                      </span>
+                    </Link>
                   </EmailContextMenu>
                 ))
               )}
@@ -241,45 +317,4 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </Sidebar>
     </Sidebar>
   )
-}
-
-function resolveActiveAddress(
-  addresses: GeneratedAddress[],
-  params: { slug?: string[] },
-  activeAddressId: string | null
-) {
-  const slug = params.slug
-  if (slug?.length === 2) {
-    const [username, domain] = slug
-    return addresses.find(
-      (a) => a.username === username && a.domainName === domain
-    )
-  }
-  if (slug?.length === 1) {
-    return addresses.find((a) => a.id === slug[0]) ?? null
-  }
-  return addresses.find((a) => a.id === activeAddressId) ?? null
-}
-
-function buildInboxHref(address: GeneratedAddress) {
-  return address.username
-    ? `/inbox/${address.username}/${address.domainName}`
-    : `/inbox/${address.id}`
-}
-
-function parseFrom(from: string) {
-  const match = from.match(/^(.+?)\s*<(.+?)>$/)
-  if (match) return { name: match[1].trim(), email: match[2].trim() }
-  return { name: null, email: from.trim() }
-}
-
-function formatRelative(value: string) {
-  const diff = Date.now() - new Date(value).getTime()
-  const m = Math.floor(diff / 60000)
-  const h = Math.floor(diff / 3600000)
-  const d = Math.floor(diff / 86400000)
-  if (m < 1) return "Baru saja"
-  if (m < 60) return `${m}m lalu`
-  if (h < 24) return `${h}j lalu`
-  return `${d}h lalu`
 }

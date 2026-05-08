@@ -1,0 +1,101 @@
+import type { EmailItem, GeneratedAddress } from "@/types"
+
+export type InboxFolder = "inbox" | "junk" | "trash"
+
+export function resolveActiveAddress(
+  addresses: GeneratedAddress[],
+  params: { slug?: string[] },
+  activeAddressId: string | null
+) {
+  const slug = params.slug
+  if (slug && slug.length >= 2) {
+    const [username, domain] = slug
+    const addressById = addresses.find((address) => address.id === username)
+    if (addressById) return addressById
+
+    return (
+      addresses.find(
+        (address) =>
+          address.username === username && address.domainName === domain
+      ) ?? null
+    )
+  }
+  if (slug?.length === 1) {
+    return (
+      addresses.find((address) => address.id === slug[0]) ??
+      addresses.find((address) => address.id === activeAddressId) ??
+      null
+    )
+  }
+  return addresses.find((address) => address.id === activeAddressId) ?? null
+}
+
+export function getMailIdFromSlug(
+  slug: string[] | undefined,
+  address: GeneratedAddress | null
+) {
+  if (!slug || !address) return null
+
+  const baseLength = address.username ? 2 : 1
+  const mailId = slug[baseLength]
+  if (!mailId || mailId === "junk" || mailId === "trash") return null
+
+  return mailId
+}
+
+export function buildInboxHref(address: GeneratedAddress) {
+  return address.username
+    ? `/inbox/${address.username}/${address.domainName}`
+    : `/inbox/${address.id}`
+}
+
+export function buildInboxFolderHref(
+  address: GeneratedAddress,
+  folder: InboxFolder
+) {
+  const base = buildInboxHref(address)
+  return folder === "inbox" ? base : `${base}/${folder}`
+}
+
+export function getInboxFolderFromPathname(pathname: string): InboxFolder {
+  const segments = pathname.split("/").filter(Boolean)
+  const last = segments.at(-1)
+
+  if (last === "junk" || last === "trash") return last
+  return "inbox"
+}
+
+export function parseInboxSender(from: string) {
+  const match = from.match(/^"?(.+?)"?\s*<(.+?)>$/)
+  if (match) return { name: match[1].trim(), email: match[2].trim() }
+  return { name: null, email: from.trim() }
+}
+
+export function mapInboxMessage(
+  message: { id: string; from: string; subject: string; timestamp: number },
+  address: GeneratedAddress,
+  isRead: boolean
+): EmailItem {
+  return {
+    id: message.id,
+    addressId: buildInboxHref(address),
+    from: parseInboxSender(message.from),
+    subject: message.subject || "(tanpa subjek)",
+    receivedAt: new Date(message.timestamp).toISOString(),
+    isRead,
+    snippet: "",
+  }
+}
+
+export function formatRelativeInboxTime(value: string) {
+  const diff = Date.now() - new Date(value).getTime()
+  const minutes = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+
+  if (minutes < 1) return "Baru saja"
+  if (minutes < 60) return `${minutes}m lalu`
+  if (hours < 24) return `${hours}j lalu`
+  if (days === 1) return "Kemarin"
+  return `${days}h lalu`
+}

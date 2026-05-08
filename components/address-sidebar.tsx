@@ -26,6 +26,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { buildInboxFolderHref, getInboxFolderFromPathname } from "@/lib/inbox"
 import { cn } from "@/lib/utils"
 import { getAddresses } from "@/services/address.service"
 import { generateAddress } from "@/services/address.service"
@@ -34,7 +35,7 @@ import { useAddressStore } from "@/stores/address.store"
 import { useDomainStore } from "@/stores/domain.store"
 import { useAuthStore } from "@/stores/auth.store"
 import { useInboxStore } from "@/stores/inbox.store"
-import type { Domain, GeneratedAddress } from "@/types"
+import type { Domain } from "@/types"
 
 interface AddressSidebarContextValue {
   open: boolean
@@ -207,8 +208,7 @@ function CollapsedAddressRail() {
       new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()
   )
 
-  const FOLDER_PATHS = ["/inbox/junk", "/inbox/trash"]
-  const activeFolder = FOLDER_PATHS.find((f) => pathname.startsWith(f)) ?? "/inbox"
+  const activeFolder = getInboxFolderFromPathname(pathname)
 
   return (
     <div className="flex min-w-0 flex-col items-center gap-2 p-2">
@@ -227,7 +227,7 @@ function CollapsedAddressRail() {
       <div className="flex flex-col items-center gap-1">
         {sortedAddresses.map((address) => {
           const isActive = activeAddressId === address.id
-          const href = buildInboxHref(address, activeFolder)
+          const href = buildInboxFolderHref(address, activeFolder)
 
           return (
             <Tooltip key={address.id}>
@@ -257,13 +257,6 @@ function CollapsedAddressRail() {
       </div>
     </div>
   )
-}
-
-function buildInboxHref(address: GeneratedAddress, folder: string) {
-  const base = address.username
-    ? `/inbox/${address.username}/${address.domainName}`
-    : `/inbox/${address.id}`
-  return folder === "/inbox" ? base : `${base}/${folder.replace("/inbox/", "")}`
 }
 
 function CollapsedDomainButton({ domain }: { domain: Domain }) {

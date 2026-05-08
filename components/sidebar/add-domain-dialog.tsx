@@ -1,7 +1,7 @@
 "use client"
 
-import { FormEvent, useState } from "react"
-import { PlusIcon } from "lucide-react"
+import { type FormEvent, useState } from "react"
+import { CheckIcon, PlusIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -30,20 +30,15 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Spinner } from "@/components/ui/spinner"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { addDomain } from "@/services/domain.service"
+import { addDomain, verifyDomain } from "@/services/domain.service"
 import { useDomainStore } from "@/stores/domain.store"
+import { isValidDomain } from "@/lib/domain-validation"
 import { cn } from "@/lib/utils"
 
-const domainPattern = /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/
-
-const MAIL_SERVER_HOST =
-  process.env.NEXT_PUBLIC_MAIL_SERVER_HOST ?? ""
-const APP_URL =
-  process.env.NEXT_PUBLIC_APP_URL ?? ""
+const MAIL_SERVER_HOST = process.env.NEXT_PUBLIC_MAIL_SERVER_HOST ?? ""
 
 interface AddDomainDialogProps {
   iconOnly?: boolean
@@ -59,13 +54,15 @@ export default function AddDomainDialog({
   const [name, setName] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [verifiedName, setVerifiedName] = useState<string | null>(null)
   const addDomainToStore = useDomainStore((state) => state.addDomain)
+  const normalizedName = name.trim().toLowerCase()
+  const isVerified = verifiedName === normalizedName
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const normalizedName = name.trim().toLowerCase()
 
-    if (!domainPattern.test(normalizedName)) {
+    if (!isValidDomain(normalizedName)) {
       setError("Format domain tidak valid")
       return
     }
@@ -74,10 +71,18 @@ export default function AddDomainDialog({
     setIsLoading(true)
 
     try {
+      if (!isVerified) {
+        await verifyDomain(normalizedName)
+        setVerifiedName(normalizedName)
+        toast.success("Domain terverifikasi")
+        return
+      }
+
       const domain = await addDomain(normalizedName)
       addDomainToStore(domain)
       toast.success("Domain ditambahkan")
       setName("")
+      setVerifiedName(null)
       setOpen(false)
     } catch (caughtError) {
       const message =
@@ -105,8 +110,8 @@ export default function AddDomainDialog({
   )
 
   const body = (
-    <ScrollArea className="min-h-0 flex-1">
-      <div className="flex flex-col gap-4 px-4 pb-4">
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="flex flex-col gap-4 p-4">
         <FieldGroup className="pt-1">
           <Field data-invalid={Boolean(error)}>
             <FieldLabel htmlFor="domain-name">Domain name</FieldLabel>
@@ -119,73 +124,46 @@ export default function AddDomainDialog({
               onChange={(event) => {
                 setName(event.target.value)
                 setError("")
+                setVerifiedName(null)
               }}
             />
             <FieldError>{error}</FieldError>
+            {isVerified && (
+              <p className="flex items-center gap-1 text-sm text-muted-foreground">
+                <CheckIcon className="size-4 text-primary" />
+                MX domain sudah cocok.
+              </p>
+            )}
           </Field>
         </FieldGroup>
 
         <section className="flex flex-col gap-3 rounded-lg border bg-muted/40 p-3 text-sm">
           <div className="flex flex-col gap-1">
-            <h3 className="font-medium">Cara 1 — Setup MX Record sendiri</h3>
+            <h3 className="font-medium">DNS yang harus dibuat</h3>
             <p className="text-muted-foreground">
-              Daftarkan domain sendiri, lalu arahkan MX record ke mail server{" "}
-              <code className="rounded bg-muted px-1 text-xs">{MAIL_SERVER_HOST}</code>.
+              Buat MX untuk domain yang kamu masukkan. A/AAAA/CNAME website
+              tidak perlu dihapus.
             </p>
           </div>
-          <ol className="ml-4 flex list-decimal flex-col gap-2">
-            <li>
-              Cari registrar domain dari daftar ICANN-Accredited Registrars.
-            </li>
-            <li>Daftarkan domain yang kamu inginkan.</li>
-            <li>Tambahkan MX record berikut pada DNS domain.</li>
-          </ol>
-          <div className="flex flex-col gap-1 rounded-lg border bg-background p-3 font-mono text-xs">
-            <p>Name/Host/Alias: kosong, @, atau nama domain</p>
-            <p>Record Type: MX</p>
-            <p>TTL: 86400</p>
-            <p>Priority: 1</p>
-            <p>Mail server: {MAIL_SERVER_HOST}</p>
+          <div className="overflow-hidden rounded-lg border bg-background text-xs">
+            <DnsRow label="Type" value="MX" />
+            <DnsRow label="Host" value="@ atau subdomain" />
+            <DnsRow
+              label="Value"
+              value={MAIL_SERVER_HOST || "mx.thvuinin.my.id"}
+            />
+            <DnsRow label="Priority" value="10" />
+            <DnsRow label="TTL" value="Auto / 3600" />
           </div>
-          <ol className="ml-4 flex list-decimal flex-col gap-2" start={4}>
-            <li>Tunggu perubahan DNS aktif, biasanya 1 menit sampai 1 hari.</li>
-            <li>
-              Akses inbox:{" "}
-              <code className="rounded bg-muted px-1">
-                {APP_URL}/[nama-domain]
-              </code>
-            </li>
-          </ol>
-        </section>
-
-        <section className="flex flex-col gap-3 rounded-lg border bg-muted/40 p-3 text-sm">
-          <div className="flex flex-col gap-1">
-            <h3 className="font-medium">Cara 2 — Minta bantuan setup</h3>
-            <p className="text-muted-foreground">
-              Hubungi support jika ingin dibantu proses setup DNS.
-            </p>
-          </div>
-          <ol className="ml-4 flex list-decimal flex-col gap-2">
-            <li>Daftarkan domain yang kamu inginkan.</li>
-            <li>Kirim Feedback dengan subject &ldquo;New Domain&rdquo;.</li>
-            <li>
-              Sertakan site registrar, username atau email akun, dan domain
-              name.
-            </li>
-            <li>
-              Jangan kirim password registrar. Gunakan akses delegasi DNS atau
-              instruksi manual dari support.
-            </li>
-          </ol>
         </section>
       </div>
-    </ScrollArea>
+    </div>
   )
 
   const submitButton = (
     <Button type="submit" disabled={isLoading}>
       {isLoading && <Spinner data-icon="inline-start" />}
-      Simpan Domain
+      {isVerified ? "Simpan Domain" : "Verifikasi Domain"}
     </Button>
   )
 
@@ -193,7 +171,7 @@ export default function AddDomainDialog({
     return (
       <Drawer open={open} onOpenChange={setOpen} direction="bottom">
         <DrawerTrigger asChild>{trigger}</DrawerTrigger>
-        <DrawerContent className="h-[82svh] w-full">
+        <DrawerContent className="h-[82svh] w-full overflow-hidden">
           <form
             className="flex min-h-0 flex-1 flex-col"
             onSubmit={(event) => void handleSubmit(event)}
@@ -201,8 +179,11 @@ export default function AddDomainDialog({
             <DrawerHeader>
               <DrawerTitle>Tambah domain custom</DrawerTitle>
               <DrawerDescription>
-                Masukkan domain dan arahkan MX record ke{" "}
-                <code className="rounded bg-muted px-1 text-xs">{MAIL_SERVER_HOST}</code>.
+                Masukkan domain yang DNS MX-nya mengarah ke{" "}
+                <code className="rounded bg-muted px-1 text-xs">
+                  {MAIL_SERVER_HOST || "mx.thvuinin.my.id"}
+                </code>
+                .
               </DrawerDescription>
             </DrawerHeader>
             <Separator />
@@ -217,24 +198,39 @@ export default function AddDomainDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="p-0 sm:max-w-2xl">
+      <DialogContent className="max-h-[min(720px,calc(100svh-2rem))] overflow-hidden p-0 sm:max-w-xl">
         <form
-          className="flex max-h-[82svh] min-h-0 flex-col"
+          className="flex max-h-[min(720px,calc(100svh-2rem))] min-h-0 flex-col"
           onSubmit={(event) => void handleSubmit(event)}
         >
           <DialogHeader className="p-4 pb-3">
             <DialogTitle>Tambah domain custom</DialogTitle>
             <DialogDescription>
-              Masukkan domain yang akan dipakai untuk disposable email, lalu
-              arahkan MX record ke{" "}
-              <code className="rounded bg-muted px-1 text-xs">{MAIL_SERVER_HOST}</code>.
+              Masukkan domain yang DNS MX-nya mengarah ke{" "}
+              <code className="rounded bg-muted px-1 text-xs">
+                {MAIL_SERVER_HOST || "mx.thvuinin.my.id"}
+              </code>
+              .
             </DialogDescription>
           </DialogHeader>
           <Separator />
           {body}
-          <DialogFooter className="border-t p-4">{submitButton}</DialogFooter>
+          <DialogFooter className="mx-0 mb-0 rounded-none border-t p-4">
+            {submitButton}
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function DnsRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[88px_minmax(0,1fr)] border-b last:border-b-0">
+      <div className="bg-muted/50 px-3 py-2 text-muted-foreground">{label}</div>
+      <code className="min-w-0 px-3 py-2 font-mono text-xs break-all">
+        {value}
+      </code>
+    </div>
   )
 }

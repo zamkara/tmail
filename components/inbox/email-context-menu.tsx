@@ -11,6 +11,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import { getInboxFolderFromPathname } from "@/lib/inbox"
 import { useInboxStore } from "@/stores/inbox.store"
 import type { EmailItem } from "@/types"
 
@@ -19,13 +20,16 @@ interface EmailContextMenuProps {
   children: React.ReactNode
 }
 
-export default function EmailContextMenu({ email, children }: EmailContextMenuProps) {
+export default function EmailContextMenu({
+  email,
+  children,
+}: EmailContextMenuProps) {
   const pathname = usePathname()
   const trashEmail = useInboxStore((s) => s.trashEmail)
   const markSpam = useInboxStore((s) => s.markSpam)
   const trashedIds = useInboxStore((s) => s.trashedIds)
 
-  const isJunk = pathname.startsWith("/inbox/junk")
+  const isJunk = getInboxFolderFromPathname(pathname) === "junk"
   const isTrashed = trashedIds.has(email.id)
   const showTrash = !isTrashed
   const showSpam = !isJunk && !isTrashed
