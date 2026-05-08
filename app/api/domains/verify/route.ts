@@ -52,7 +52,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json(
       {
-        error: `MX record belum ditemukan. Buat MX ke ${expected}, lalu coba verifikasi lagi setelah DNS aktif.`,
+        error: `MX record not found. Point your MX to ${expected}, then try verifying again after DNS propagates.`,
         expected,
         records: [],
         verified: false,

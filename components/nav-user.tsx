@@ -81,7 +81,7 @@ export function NavUser() {
         email: authUser.email,
         avatar: getGravatarUrl(authUser.email, 80),
       }
-    : { name: "Guest", email: "Tanpa akun", avatar: "" }
+    : { name: "Guest", email: "No account", avatar: "" }
 
   async function handleAuthSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -101,10 +101,10 @@ export function NavUser() {
       }
       setAuthDialogOpen(false)
       toast.success(
-        authMode === "signup" ? "Akun berhasil dibuat" : "Berhasil masuk"
+        authMode === "signup" ? "Account created successfully" : "Signed in successfully"
       )
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Terjadi kesalahan")
+      toast.error(err instanceof Error ? err.message : "Something went wrong")
     } finally {
       setAuthLoading(false)
     }
@@ -115,7 +115,7 @@ export function NavUser() {
     setUser(null)
     setAddresses([])
     router.push("/inbox")
-    toast.success("Berhasil keluar")
+    toast.success("Signed out successfully")
   }
 
   return (
@@ -191,7 +191,7 @@ export function NavUser() {
                     }}
                   >
                     <LogInIcon />
-                    Masuk
+                    Sign In
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={() => {
@@ -200,7 +200,7 @@ export function NavUser() {
                     }}
                   >
                     <UserIcon />
-                    Daftar
+                    Sign Up
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
               )}
@@ -251,12 +251,12 @@ function AuthForm({
         <FieldGroup>
           {isSignup && (
             <Field>
-              <FieldLabel htmlFor="auth-name">Nama</FieldLabel>
+              <FieldLabel htmlFor="auth-name">Name</FieldLabel>
               <Input
                 id="auth-name"
                 name="name"
                 type="text"
-                placeholder="Nama lengkap"
+                placeholder="Full name"
                 required
               />
             </Field>
@@ -285,16 +285,16 @@ function AuthForm({
       </div>
       <div className="flex flex-col gap-3 px-4 pb-4">
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? <Spinner /> : isSignup ? "Daftar" : "Masuk"}
+          {loading ? <Spinner /> : isSignup ? "Sign Up" : "Sign In"}
         </Button>
         <FieldDescription className="text-center">
-          {isSignup ? "Sudah punya akun?" : "Belum punya akun?"}{" "}
+                    {isSignup ? "Already have an account?" : "Don't have an account?"} {" "}
           <button
             type="button"
             className="underline underline-offset-4 hover:text-foreground"
             onClick={() => onModeChange(isSignup ? "signin" : "signup")}
           >
-            {isSignup ? "Masuk" : "Daftar"}
+            {isSignup ? "Sign In" : "Sign Up"}
           </button>
         </FieldDescription>
       </div>
@@ -327,12 +327,12 @@ function AuthDialog({
         <DrawerContent>
           <DrawerHeader className="px-4 pt-4">
             <DrawerTitle>
-              {isSignup ? "Buat akun" : "Selamat datang"}
+              {isSignup ? "Create account" : "Welcome back"}
             </DrawerTitle>
             <DrawerDescription>
               {isSignup
-                ? "Daftar dengan email dan password"
-                : "Masuk dengan email dan password"}
+                ? "Sign up with email and password"
+                : "Sign in with email and password"}
             </DrawerDescription>
           </DrawerHeader>
           <AuthForm
@@ -350,11 +350,11 @@ function AuthDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="p-0 sm:max-w-md">
         <DialogHeader className="px-4 pt-4">
-          <DialogTitle>{isSignup ? "Buat akun" : "Selamat datang"}</DialogTitle>
+          <DialogTitle>{isSignup ? "Create account" : "Welcome back"}</DialogTitle>
           <DialogDescription>
             {isSignup
-              ? "Daftar dengan email dan password"
-              : "Masuk dengan email dan password"}
+              ? "Sign up with email and password"
+              : "Sign in with email and password"}
           </DialogDescription>
         </DialogHeader>
         <AuthForm
@@ -411,7 +411,7 @@ function PreferenceSurface({
           <DrawerHeader className="px-4 pt-4">
             <DrawerTitle>Preference</DrawerTitle>
             <DrawerDescription>
-              Update email, username, password, atau hapus akun.
+              Update email, username, password, or delete account.
             </DrawerDescription>
           </DrawerHeader>
           <div className="min-h-0 flex-1 overflow-auto px-4">
@@ -431,7 +431,7 @@ function PreferenceSurface({
         <DialogHeader className="px-4 pt-4">
           <DialogTitle>Preference</DialogTitle>
           <DialogDescription>
-            Update email, username, password, atau hapus akun.
+            Update email, username, password, or delete account.
           </DialogDescription>
         </DialogHeader>
         <div className="px-4 pb-4">
@@ -465,7 +465,7 @@ function NotificationsSurface({
         <DrawerContent className="h-[64svh]">
           <DrawerHeader className="px-4 pt-4">
             <DrawerTitle>Notifications</DrawerTitle>
-            <DrawerDescription>Daftar notifikasi akun.</DrawerDescription>
+            <DrawerDescription>Account notifications list.</DrawerDescription>
           </DrawerHeader>
           <ScrollArea className="min-h-0 flex-1 px-4 pb-4">
             {content}
@@ -480,7 +480,7 @@ function NotificationsSurface({
       <DialogContent className="p-0 sm:max-w-lg">
         <DialogHeader className="px-4 pt-4">
           <DialogTitle>Notifications</DialogTitle>
-          <DialogDescription>Daftar notifikasi akun.</DialogDescription>
+          <DialogDescription>Account notifications list.</DialogDescription>
         </DialogHeader>
         <ScrollArea className="max-h-105 px-4 pb-4">{content}</ScrollArea>
       </DialogContent>
@@ -491,26 +491,26 @@ function NotificationsSurface({
 const notifications = [
   {
     id: "notif_domain_ready",
-    title: "Domain siap digunakan",
-    description: "MX record tmail.io sudah aktif dan bisa menerima email.",
-    time: "2 menit lalu",
+    title: "Domain ready",
+    description: "MX record for tmail.io is active and can receive emails.",
+    time: "2 min ago",
     unread: true,
     icon: CheckCircle2Icon,
   },
   {
     id: "notif_new_mail",
-    title: "Email baru diterima",
-    description: "wx7k2m@tmail.io menerima pesan dari GitHub.",
-    time: "30 menit lalu",
+    title: "New email received",
+    description: "wx7k2m@tmail.io received a message from GitHub.",
+    time: "30 min ago",
     unread: true,
     icon: MailIcon,
   },
   {
     id: "notif_dns_pending",
-    title: "DNS masih propagasi",
+    title: "DNS still propagating",
     description:
-      "Custom domain mycompany.com belum terdeteksi. Cek lagi beberapa menit lagi.",
-    time: "1 jam lalu",
+      "Custom domain mycompany.com has not been detected yet. Check again in a few minutes.",
+    time: "1 hour ago",
     unread: false,
     icon: ClockIcon,
   },

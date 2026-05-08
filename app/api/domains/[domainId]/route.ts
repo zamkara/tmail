@@ -56,7 +56,7 @@ export async function PATCH(
   })
   if (duplicate) {
     return NextResponse.json(
-      { error: "Domain sudah terdaftar" },
+      { error: "Domain already registered" },
       { status: 409 }
     )
   }

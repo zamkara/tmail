@@ -14,8 +14,8 @@ interface InboxEmptyProps {
 }
 
 export default function InboxEmpty({
-  title = "Belum ada email",
-  description = "Pesan yang masuk ke alamat ini akan tampil di sini.",
+  title = "No emails yet",
+  description = "Messages received at this address will appear here.",
 }: InboxEmptyProps) {
   return (
     <Empty className="min-h-[360px] border">

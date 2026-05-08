@@ -42,6 +42,6 @@ export async function POST(req: Request) {
 
     return res
   } catch {
-    return NextResponse.json({ error: "Terjadi kesalahan server" }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -80,7 +80,7 @@ export function mapInboxMessage(
     id: message.id,
     addressId: buildInboxHref(address),
     from: parseInboxSender(message.from),
-    subject: message.subject || "(tanpa subjek)",
+    subject: message.subject || "(no subject)",
     receivedAt: new Date(message.timestamp).toISOString(),
     isRead,
     snippet: "",
@@ -93,9 +93,9 @@ export function formatRelativeInboxTime(value: string) {
   const hours = Math.floor(diff / 3600000)
   const days = Math.floor(diff / 86400000)
 
-  if (minutes < 1) return "Baru saja"
-  if (minutes < 60) return `${minutes}m lalu`
-  if (hours < 24) return `${hours}j lalu`
-  if (days === 1) return "Kemarin"
-  return `${days}h lalu`
+  if (minutes < 1) return "Just now"
+  if (minutes < 60) return `${minutes}m ago`
+  if (hours < 24) return `${hours}h ago`
+  if (days === 1) return "Yesterday"
+  return `${days}d ago`
 }

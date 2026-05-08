@@ -49,10 +49,9 @@ export default function GenerateAddressButton({
       resetInbox()
       addAddress(address)
       setActiveAddress(address.id)
-      toast.success("Alamat email dibuat")
-      router.push(`/inbox/${address.id}`)
+      toast.success("Email address created")
     } catch {
-      toast.error("Gagal membuat alamat email")
+      toast.error("Failed to create email address")
     } finally {
       setIsLoading(false)
     }
@@ -63,7 +62,7 @@ export default function GenerateAddressButton({
       type="button"
       variant="ghost"
       size="icon-xs"
-      aria-label={`Buat alamat dari ${domainName}`}
+      aria-label={`Create address from ${domainName}`}
       disabled={isLoading}
       onClick={() => void handleGenerate()}
     >

@@ -25,6 +25,7 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from "@/components/ui/drawer"
+import EmailContextMenu from "@/components/inbox/email-context-menu"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
@@ -54,6 +55,7 @@ export function MobileInboxDrawerTrigger() {
   const [emails, setEmails] = React.useState<EmailItem[]>([])
   const [search, setSearch] = React.useState("")
   const [isRefreshing, setIsRefreshing] = React.useState(false)
+  const [isAutoRefreshing, setIsAutoRefreshing] = React.useState(false)
   const params = useParams<{ slug?: string[] }>()
   const pathname = usePathname()
   const router = useRouter()
@@ -62,6 +64,7 @@ export function MobileInboxDrawerTrigger() {
   const setActiveAddress = useAddressStore((s) => s.setActiveAddress)
   const readIds = useInboxStore((s) => s.readIds)
   const trashedIds = useInboxStore((s) => s.trashedIds)
+  const permanentlyDeletedIds = useInboxStore((s) => s.permanentlyDeletedIds)
   const spamSenders = useInboxStore((s) => s.spamSenders)
   const emailsRef = React.useRef<EmailItem[]>([])
 
@@ -79,7 +82,7 @@ export function MobileInboxDrawerTrigger() {
           `/api/inbox?address=${encodeURIComponent(address)}`,
           { cache: "no-store" }
         )
-        if (!res.ok) throw new Error("Gagal memuat email")
+        if (!res.ok) throw new Error("Failed to load emails")
         const data = (await res.json()) as {
           messages: Array<{
             id: string
@@ -98,7 +101,7 @@ export function MobileInboxDrawerTrigger() {
           setEmails(nextEmails)
         }
       } catch {
-        if (!silent) toast.error("Gagal memuat email")
+        if (!silent) toast.error("Failed to load emails")
       }
     },
     [activeAddress, readIds]
@@ -127,15 +130,23 @@ export function MobileInboxDrawerTrigger() {
 
     const address = activeAddress
 
-    const interval = window.setInterval(() => {
+    async function autoRefresh() {
       if (document.visibilityState === "visible" && navigator.onLine) {
-        void fetchEmails(address.address, true)
+        setIsAutoRefreshing(true)
+        await fetchEmails(address.address, true)
+        setIsAutoRefreshing(false)
       }
+    }
+
+    const interval = window.setInterval(() => {
+      void autoRefresh()
     }, INBOX_POLL_INTERVAL_MS)
 
-    function handleVisible() {
+    async function handleVisible() {
       if (document.visibilityState === "visible") {
-        void fetchEmails(address.address, true)
+        setIsAutoRefreshing(true)
+        await fetchEmails(address.address, true)
+        setIsAutoRefreshing(false)
       }
     }
 
@@ -145,7 +156,7 @@ export function MobileInboxDrawerTrigger() {
     return () => {
       window.clearInterval(interval)
       window.removeEventListener("focus", handleVisible)
-      document.removeEventListener("visibilitychange", handleVisible)
+      window.removeEventListener("visibilitychange", handleVisible)
     }
   }, [activeAddress, fetchEmails, open])
 
@@ -158,8 +169,9 @@ export function MobileInboxDrawerTrigger() {
 
   const filtered = emails.filter((email) => {
     const isTrashed = trashedIds.has(email.id)
+    const isPermanentlyDeleted = permanentlyDeletedIds.has(email.id)
     const isSpam = spamSenders.has(email.from.email)
-    if (activeItem.folder === "trash") return isTrashed
+    if (activeItem.folder === "trash") return isTrashed && !isPermanentlyDeleted
     if (activeItem.folder === "junk") return !isTrashed && isSpam
     if (isTrashed || isSpam) return false
     if (!search) return true
@@ -179,7 +191,7 @@ export function MobileInboxDrawerTrigger() {
           variant="ghost"
           size="icon-sm"
           className="-ml-1 md:hidden"
-          aria-label="Buka inbox"
+          aria-label="Open inbox"
         >
           <PanelLeftIcon />
         </Button>
@@ -187,12 +199,12 @@ export function MobileInboxDrawerTrigger() {
       <DrawerContent className="h-[78svh] w-full">
         <DrawerHeader>
           <DrawerTitle>Inbox</DrawerTitle>
-          <DrawerDescription>Daftar folder dan email masuk.</DrawerDescription>
+          <DrawerDescription>List of folders and incoming emails.</DrawerDescription>
         </DrawerHeader>
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex items-center gap-2 border-b p-3">
             <Input
-              placeholder="Cari email..."
+              placeholder="Search emails..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -204,7 +216,7 @@ export function MobileInboxDrawerTrigger() {
               onClick={() => void refreshMails()}
               disabled={isRefreshing}
             >
-              <RefreshCwIcon className={cn(isRefreshing && "animate-spin")} />
+              <RefreshCwIcon className={cn((isRefreshing || isAutoRefreshing) && "animate-spin")} />
             </Button>
           </div>
           <ScrollArea className="min-h-0 flex-1">
@@ -212,22 +224,31 @@ export function MobileInboxDrawerTrigger() {
               {isRefreshing && emails.length === 0 ? (
                 <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
                   <Loader2Icon className="size-4 animate-spin" />
-                  <span>Memuat inbox...</span>
+                  <span>Loading inbox...</span>
                 </div>
               ) : filtered.length === 0 ? (
                 <p className="p-4 text-sm text-muted-foreground">
                   {activeAddress
-                    ? "Belum ada email."
-                    : "Pilih alamat untuk melihat inbox."}
+                    ? "No emails yet."
+                    : "Select an address to view inbox."}
                 </p>
               ) : (
-                filtered.map((email) => (
-                  <Link
-                    key={email.id}
-                    href={`${email.addressId}/${email.id}`}
-                    className="flex flex-col items-start gap-2 border-b p-4 text-left text-sm leading-tight last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  >
+                filtered.map((email) => {
+                  const addressPath = email.addressId.replace("/inbox/", "")
+                  const emailHref = activeFolder !== "inbox"
+                    ? `/inbox/${activeFolder}/${addressPath}/${email.id}`
+                    : `${email.addressId}/${email.id}`
+
+                  return (
+                  <EmailContextMenu key={email.id} email={email}>
+                    <Link
+                      href={emailHref}
+                      className="flex flex-col items-start gap-2 border-b p-4 text-left text-sm leading-tight last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    >
                     <span className="flex w-full items-center gap-2">
+                      {!email.isRead && (
+                        <span className="size-2 shrink-0 rounded-full bg-primary" aria-hidden />
+                      )}
                       <span className="truncate">
                         {email.from.name ?? email.from.email}
                       </span>
@@ -235,10 +256,11 @@ export function MobileInboxDrawerTrigger() {
                         {formatRelativeInboxTime(email.receivedAt)}
                       </span>
                     </span>
-                    <span className="font-medium">{email.subject}</span>
-                  </Link>
-                ))
-              )}
+                      <span className="font-medium">{email.subject}</span>
+                    </Link>
+                  </EmailContextMenu>
+                )
+              }))}
             </div>
           </ScrollArea>
           <nav className="flex shrink-0 flex-row items-center justify-center gap-2 border-t bg-popover p-3">
@@ -285,16 +307,16 @@ export function MobileAddressDrawerTrigger() {
           variant="ghost"
           size="icon-sm"
           className="md:hidden"
-          aria-label="Buka address"
+          aria-label="Open address"
         >
           <PanelRightIcon />
         </Button>
       </DrawerTrigger>
       <DrawerContent className="h-[78svh] w-full">
         <DrawerHeader>
-          <DrawerTitle>Alamat Email</DrawerTitle>
+          <DrawerTitle>Email Addresses</DrawerTitle>
           <DrawerDescription>
-            Generate dan pindah disposable address.
+            Generate and switch disposable addresses.
           </DrawerDescription>
         </DrawerHeader>
         <Separator />

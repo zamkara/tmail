@@ -75,7 +75,7 @@ export async function POST(req: Request) {
   const existing = await Domain.findOne({ name: normalized })
   if (existing) {
     return NextResponse.json(
-      { error: "Domain sudah terdaftar" },
+      { error: "Domain already registered" },
       { status: 409 }
     )
   }
