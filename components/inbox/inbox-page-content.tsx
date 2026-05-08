@@ -95,7 +95,7 @@ export default function InboxPageContent({ slug }: InboxPageContentProps) {
     return (
       <div className="flex flex-1 items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
         <Spinner />
-        <span>Memuat inbox...</span>
+        <span>Loading inbox...</span>
       </div>
     )
   }
@@ -104,8 +104,8 @@ export default function InboxPageContent({ slug }: InboxPageContentProps) {
     return (
       <div className="flex flex-1 items-center justify-center p-4">
         <InboxEmpty
-          title="Pilih alamat"
-          description="Pilih alamat email untuk melihat inbox."
+          title="Select address"
+          description="Select an email address to view inbox."
         />
       </div>
     )
@@ -114,7 +114,7 @@ export default function InboxPageContent({ slug }: InboxPageContentProps) {
   if (!mailId) {
     return (
       <div className="flex flex-1 items-center justify-center p-4">
-        <InboxEmpty description="Pilih email dari daftar untuk membaca isinya." />
+        <InboxEmpty description="Select an email from the list to read." />
       </div>
     )
   }
@@ -123,7 +123,7 @@ export default function InboxPageContent({ slug }: InboxPageContentProps) {
     return (
       <div className="flex flex-1 items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
         <Spinner />
-        <span>Memuat email...</span>
+        <span>Loading email...</span>
       </div>
     )
   }
@@ -132,8 +132,8 @@ export default function InboxPageContent({ slug }: InboxPageContentProps) {
     return (
       <div className="flex flex-1 items-center justify-center p-4">
         <InboxEmpty
-          title="Email tidak ditemukan"
-          description={error ?? "Email ini tidak tersedia."}
+          title="Email not found"
+          description={error ?? "This email is not available."}
         />
       </div>
     )
@@ -149,7 +149,7 @@ function mapEmailDetail(message: BeMessage, addressId: string): EmailDetail {
     id: message.id,
     addressId,
     from: parseInboxSender(message.from),
-    subject: message.subject || "(tanpa subjek)",
+    subject: message.subject || "(no subject)",
     receivedAt: new Date(receivedAt).toISOString(),
     isRead: true,
     snippet: "",

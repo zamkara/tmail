@@ -3,7 +3,7 @@ import type { GeneratedAddress } from "@/types"
 // Untuk user login: ambil dari API (tersimpan di DB)
 export async function getAddresses(): Promise<GeneratedAddress[]> {
   const res = await fetch("/api/addresses")
-  if (!res.ok) throw new Error("Gagal memuat alamat")
+  if (!res.ok) throw new Error("Failed to load addresses")
   return res.json()
 }
 
@@ -15,7 +15,7 @@ export async function generateAddressForUser(domainId: string): Promise<Generate
     body: JSON.stringify({ domainId }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error ?? "Gagal membuat alamat")
+  if (!res.ok) throw new Error(data.error ?? "Failed to create address")
   return data
 }
 

@@ -1,7 +1,9 @@
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 
 import EmailContextMenu from "@/components/inbox/email-context-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { getInboxFolderFromPathname } from "@/lib/inbox"
 import type { EmailItem } from "@/types"
 import { cn } from "@/lib/utils"
 
@@ -21,31 +23,38 @@ function formatRelativeTime(value: string) {
   const days = Math.floor(diff / 86400000)
 
   if (minutes < 1) {
-    return "Baru saja"
+    return "Just now"
   }
 
   if (minutes < 60) {
-    return `${minutes}m lalu`
+    return `${minutes}m ago`
   }
 
   if (hours < 24) {
-    return `${hours}j lalu`
+    return `${hours}h ago`
   }
 
   if (days === 1) {
-    return "Kemarin"
+    return "Yesterday"
   }
 
-  return `${days}h lalu`
+  return `${days}d ago`
 }
 
 export default function EmailListItem({ email }: EmailListItemProps) {
+  const pathname = usePathname()
+  const currentFolder = getInboxFolderFromPathname(pathname)
   const senderName = email.from.name ?? email.from.email
+
+  const addressPath = email.addressId.replace("/inbox/", "")
+  const href = currentFolder !== "inbox"
+    ? `/inbox/${currentFolder}/${addressPath}/${email.id}`
+    : `/inbox/${addressPath}/${email.id}`
 
   return (
     <EmailContextMenu email={email}>
       <Link
-        href={`/inbox/${email.addressId}/${email.id}`}
+        href={href}
         className="flex min-w-0 items-start gap-3 rounded-lg p-3 hover:bg-muted"
       >
         <Avatar>

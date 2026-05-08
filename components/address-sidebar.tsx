@@ -129,10 +129,10 @@ export function AddressSidebar() {
                         !open && "hidden"
                       )}
                     >
-                      <span className="truncate font-medium">Alamat Email</span>
-                      <span className="truncate text-xs text-muted-foreground">
-                        Generate dan pindah address
-                      </span>
+                    <span className="truncate font-medium">Email Addresses</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      Generate and switch addresses
+                    </span>
                     </div>
                   </div>
                 </SidebarMenuButton>
@@ -151,7 +151,7 @@ export function AddressSidebar() {
           </SidebarContent>
           <SidebarFooter className={cn(!open && "hidden")}>
             <p className="px-2 text-xs text-muted-foreground">
-              Kamu bisa memakai beberapa address sekaligus.
+              You can use multiple addresses at once.
             </p>
           </SidebarFooter>
         </div>
@@ -180,7 +180,7 @@ function CollapsedAddressRail() {
       try {
         setDomains(await getDomains())
       } catch {
-        toast.error("Gagal memuat daftar domain")
+        toast.error("Failed to load domains")
       }
     }
 
@@ -196,7 +196,7 @@ function CollapsedAddressRail() {
       try {
         setAddresses(await getAddresses())
       } catch {
-        toast.error("Gagal memuat alamat aktif")
+        toast.error("Failed to load active address")
       }
     }
 
@@ -272,9 +272,9 @@ function CollapsedDomainButton({ domain }: { domain: Domain }) {
       const address = await generateAddress(domain.id, domain.name, !!user)
       resetInbox()
       addAddress(address)
-      toast.success("Alamat email dibuat")
+      toast.success("Email address created")
     } catch {
-      toast.error("Gagal membuat alamat email")
+      toast.error("Failed to create email address")
     } finally {
       setIsLoading(false)
     }
@@ -285,7 +285,7 @@ function CollapsedDomainButton({ domain }: { domain: Domain }) {
       type="button"
       variant="ghost"
       size="icon-sm"
-      aria-label={`Buat alamat dari ${domain.name}`}
+      aria-label={`Create address from ${domain.name}`}
       disabled={isLoading}
       onClick={() => void handleGenerate()}
     >

@@ -93,7 +93,7 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
         const nextDomains = await getDomains()
         setDomains(nextDomains)
       } catch {
-        toast.error("Gagal memuat daftar domain")
+        toast.error("Failed to load domains")
       }
     }
 
@@ -117,9 +117,9 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
       addAddress(address)
       setActiveAddress(address.id)
       router.push(buildInboxHref(address))
-      toast.success("Alamat email dibuat")
+      toast.success("Email address created")
     } catch {
-      toast.error("Gagal membuat alamat email")
+      toast.error("Failed to create email address")
     } finally {
       setLoadingDomainId(null)
     }
@@ -173,7 +173,7 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
                 )}
                 <SidebarMenuAction
                   type="button"
-                  aria-label={`Generate address dari ${domain.name}`}
+                  aria-label={`Generate address from ${domain.name}`}
                   disabled={isLoading}
                   onClick={() =>
                     void handleGenerateAddress(domain.id, domain.name)
@@ -215,7 +215,7 @@ function ManageDomainDialog({
     const normalizedName = name.trim().toLowerCase()
 
     if (!isValidDomain(normalizedName)) {
-      setError("Format domain tidak valid")
+      setError("Invalid domain format")
       return
     }
 
@@ -225,13 +225,13 @@ function ManageDomainDialog({
     try {
       const nextDomain = await updateDomainRequest(domain.id, normalizedName)
       onUpdated(nextDomain)
-      toast.success("Domain diperbarui")
+      toast.success("Domain updated")
       setOpen(false)
     } catch (caughtError) {
       const message =
         caughtError instanceof Error
           ? caughtError.message
-          : "Gagal mengubah domain"
+          : "Failed to update domain"
       setError(message)
       toast.error(message)
     } finally {
@@ -240,7 +240,7 @@ function ManageDomainDialog({
   }
 
   async function handleDelete() {
-    const confirmed = window.confirm(`Hapus domain ${domain.name}?`)
+    const confirmed = window.confirm(`Delete domain ${domain.name}?`)
     if (!confirmed) return
 
     setIsDeleting(true)
@@ -248,13 +248,13 @@ function ManageDomainDialog({
     try {
       await deleteDomain(domain.id)
       onDeleted(domain.id)
-      toast.success("Domain dihapus")
+      toast.success("Domain deleted")
       setOpen(false)
     } catch (caughtError) {
       const message =
         caughtError instanceof Error
           ? caughtError.message
-          : "Gagal menghapus domain"
+          : "Failed to delete domain"
       setError(message)
       toast.error(message)
     } finally {
@@ -279,8 +279,8 @@ function ManageDomainDialog({
           <DialogHeader className="p-4 pb-3">
             <DialogTitle>Manage domain</DialogTitle>
             <DialogDescription>
-              Ubah atau hapus domain custom. Perubahan nama domain tetap harus
-              lolos verifikasi MX.
+              Change or delete a custom domain. Renaming still requires
+              passing MX verification.
             </DialogDescription>
           </DialogHeader>
           <Separator />
@@ -314,11 +314,11 @@ function ManageDomainDialog({
               ) : (
                 <Trash2Icon data-icon="inline-start" />
               )}
-              Hapus
+              Delete
             </Button>
             <Button type="submit" disabled={isSaving || isDeleting}>
               {isSaving && <Spinner data-icon="inline-start" />}
-              Simpan
+              Save
             </Button>
           </DialogFooter>
         </form>

@@ -11,7 +11,7 @@ export async function register(name: string, email: string, password: string): P
     body: JSON.stringify({ name, email, password }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error ?? "Gagal mendaftar")
+  if (!res.ok) throw new Error(data.error ?? "Failed to register")
   return data.user
 }
 
@@ -22,7 +22,7 @@ export async function login(email: string, password: string): Promise<AuthUser> 
     body: JSON.stringify({ email, password }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error ?? "Gagal masuk")
+  if (!res.ok) throw new Error(data.error ?? "Failed to sign in")
   return data.user
 }
 

@@ -2,6 +2,7 @@ import { Geist_Mono, Inter } from "next/font/google"
 
 import "./globals.css"
 import { AuthLoader } from "@/components/auth-loader"
+import { InboxStateSync } from "@/components/inbox-state-sync"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -28,6 +29,7 @@ export default function RootLayout({
       <body>
         <ThemeProvider>
           <AuthLoader />
+          <InboxStateSync />
           <TooltipProvider>{children}</TooltipProvider>
           <Toaster />
         </ThemeProvider>

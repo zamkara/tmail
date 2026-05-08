@@ -29,7 +29,7 @@ export function getMxVerificationError(
   }))
 
   if (normalizedRecords.length === 0) {
-    return `MX record belum ditemukan. Buat MX ke ${expected}, lalu coba verifikasi lagi setelah DNS aktif.`
+    return `MX record not found. Point your MX to ${expected}, then try verifying again after DNS propagates.`
   }
 
   const expectedRecords = normalizedRecords.filter(
@@ -37,7 +37,7 @@ export function getMxVerificationError(
   )
 
   if (expectedRecords.length === 0) {
-    return `MX domain belum mengarah ke ${expected}`
+    return `MX record does not point to ${expected}`
   }
 
   const competingRecords = normalizedRecords.filter(
@@ -45,7 +45,7 @@ export function getMxVerificationError(
   )
 
   if (competingRecords.length > 0) {
-    return `Masih ada MX lain di domain ini. Hapus MX lain atau gunakan subdomain khusus seperti inbox.example.com.`
+    return `There are other MX records for this domain. Remove them or use a dedicated subdomain like inbox.example.com.`
   }
 
   return null

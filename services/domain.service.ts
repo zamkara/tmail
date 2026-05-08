@@ -2,7 +2,7 @@ import type { Domain } from "@/types"
 
 export async function getDomains(): Promise<Domain[]> {
   const res = await fetch("/api/domains")
-  if (!res.ok) throw new Error("Gagal memuat domain")
+  if (!res.ok) throw new Error("Failed to load domains")
   return res.json()
 }
 
@@ -13,7 +13,7 @@ export async function addDomain(name: string): Promise<Domain> {
     body: JSON.stringify({ name }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error ?? "Gagal menambah domain")
+  if (!res.ok) throw new Error(data.error ?? "Failed to add domain")
   return data
 }
 
@@ -24,7 +24,7 @@ export async function verifyDomain(name: string): Promise<void> {
     body: JSON.stringify({ name }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error ?? "Gagal verifikasi domain")
+  if (!res.ok) throw new Error(data.error ?? "Failed to verify domain")
 }
 
 export async function updateDomain(id: string, name: string): Promise<Domain> {
@@ -34,7 +34,7 @@ export async function updateDomain(id: string, name: string): Promise<Domain> {
     body: JSON.stringify({ name }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error ?? "Gagal mengubah domain")
+  if (!res.ok) throw new Error(data.error ?? "Failed to update domain")
   return data
 }
 
@@ -43,5 +43,5 @@ export async function deleteDomain(id: string): Promise<void> {
     method: "DELETE",
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error ?? "Gagal menghapus domain")
+  if (!res.ok) throw new Error(data.error ?? "Failed to delete domain")
 }

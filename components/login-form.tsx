@@ -47,7 +47,7 @@ export function LoginForm({
       }
       router.push("/inbox")
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Terjadi kesalahan")
+      toast.error(err instanceof Error ? err.message : "Something went wrong")
     } finally {
       setIsLoading(false)
     }
@@ -61,18 +61,18 @@ export function LoginForm({
             <FieldGroup>
               <div className="flex flex-col items-center gap-2 text-center">
                 <h1 className="text-2xl font-bold">
-                  {isSignup ? "Buat akun" : "Selamat datang"}
+                  {isSignup ? "Create account" : "Welcome back"}
                 </h1>
                 <p className="text-balance text-muted-foreground">
                   {isSignup
-                    ? "Daftar dengan email dan password"
-                    : "Masuk dengan email dan password"}
+                    ? "Sign up with email and password"
+                    : "Sign in with email and password"}
                 </p>
               </div>
               {isSignup && (
                 <Field>
-                  <FieldLabel htmlFor="name">Nama</FieldLabel>
-                  <Input id="name" name="name" type="text" placeholder="Nama lengkap" required />
+                  <FieldLabel htmlFor="name">Name</FieldLabel>
+                  <Input id="name" name="name" type="text" placeholder="Full name" required />
                 </Field>
               )}
               <Field>
@@ -85,13 +85,13 @@ export function LoginForm({
               </Field>
               <Field>
                 <Button type="submit" disabled={isLoading}>
-                  {isLoading ? <Spinner /> : isSignup ? "Daftar" : "Masuk"}
+                  {isLoading ? <Spinner /> : isSignup ? "Sign Up" : "Sign In"}
                 </Button>
               </Field>
               <FieldDescription className="text-center">
-                {isSignup ? "Sudah punya akun?" : "Belum punya akun?"}{" "}
+                                {isSignup ? "Already have an account?" : "Don't have an account?"} {" "}
                 <Link href={isSignup ? "/signin" : "/signup"}>
-                  {isSignup ? "Masuk" : "Daftar"}
+                  {isSignup ? "Sign In" : "Sign Up"}
                 </Link>
               </FieldDescription>
             </FieldGroup>

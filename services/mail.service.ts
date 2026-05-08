@@ -28,7 +28,7 @@ function mapInboxItem(msg: BeInboxItem, addressId: string): EmailItem {
     id: msg.id,
     addressId,
     from: parseFrom(msg.from),
-    subject: msg.subject || "(tanpa subjek)",
+    subject: msg.subject || "(no subject)",
     receivedAt: new Date(msg.timestamp).toISOString(),
     isRead: false,
     snippet: "",
@@ -47,7 +47,7 @@ export async function getEmailDetail(
   mailId: string
 ): Promise<EmailDetail> {
   const res = await fetch(`${BASE}/messages/${mailId}`)
-  if (!res.ok) throw new Error("Email tidak ditemukan")
+  if (!res.ok) throw new Error("Email not found")
   const msg = await res.json() as BeMessage
 
   return {

@@ -6,7 +6,7 @@ const AUTH_ONLY_PATHS = ["/account"]
 // Halaman yang hanya bisa diakses kalau BELUM login
 const GUEST_ONLY_PATHS = ["/signin", "/signup", "/login"]
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
   const token = req.cookies.get("tmail_token")?.value
 

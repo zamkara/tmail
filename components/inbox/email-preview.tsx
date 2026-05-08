@@ -7,7 +7,7 @@ interface EmailPreviewProps {
 }
 
 function formatFullDate(value: string) {
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat("en-US", {
     dateStyle: "full",
     timeStyle: "short",
   }).format(new Date(value))
@@ -49,7 +49,7 @@ export default function EmailPreview({ email }: EmailPreviewProps) {
           </h1>
           <div className="flex flex-col gap-1 text-sm text-muted-foreground">
             <p>
-              Dari <span className="text-foreground">{senderName}</span> &lt;
+              From <span className="text-foreground">{senderName}</span> &lt;
               {email.from.email}&gt;
             </p>
             <p>{formatFullDate(email.receivedAt)}</p>

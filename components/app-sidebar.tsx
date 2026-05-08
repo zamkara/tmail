@@ -59,6 +59,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [unreadOnly, setUnreadOnly] = React.useState(false)
   const [search, setSearch] = React.useState("")
   const [isRefreshing, setIsRefreshing] = React.useState(false)
+  const [isAutoRefreshing, setIsAutoRefreshing] = React.useState(false)
   const params = useParams<{ slug?: string[] }>()
   const pathname = usePathname()
   const router = useRouter()
@@ -66,6 +67,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const activeAddressId = useAddressStore((s) => s.activeAddressId)
   const readIds = useInboxStore((s) => s.readIds)
   const trashedIds = useInboxStore((s) => s.trashedIds)
+  const permanentlyDeletedIds = useInboxStore((s) => s.permanentlyDeletedIds)
   const spamSenders = useInboxStore((s) => s.spamSenders)
   const emailsRef = React.useRef<EmailItem[]>([])
 
@@ -84,7 +86,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             cache: "no-store",
           }
         )
-        if (!res.ok) throw new Error("Gagal memuat email")
+        if (!res.ok) throw new Error("Failed to load emails")
         const data = (await res.json()) as {
           messages: Array<{
             id: string
@@ -103,7 +105,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           setEmails(nextEmails)
         }
       } catch {
-        if (!silent) toast.error("Gagal memuat email")
+        if (!silent) toast.error("Failed to load emails")
       }
     },
     [readIds]
@@ -120,12 +122,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       return
     }
 
-    let cancelled = false
+      let cancelled = false
 
-    async function refresh(silent = false) {
-      if (!activeAddress || cancelled) return
-      await fetchEmails(activeAddress.address, activeAddress, silent)
-    }
+      async function refresh(silent = false) {
+        if (!activeAddress || cancelled) return
+        if (!silent) {
+          await fetchEmails(activeAddress.address, activeAddress, silent)
+        } else {
+          setIsAutoRefreshing(true)
+          await fetchEmails(activeAddress.address, activeAddress, silent)
+          setIsAutoRefreshing(false)
+        }
+      }
 
     void refresh()
 
@@ -161,8 +169,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const filtered = emails.filter((e) => {
     const isTrashed = trashedIds.has(e.id)
+    const isPermanentlyDeleted = permanentlyDeletedIds.has(e.id)
     const isSpam = spamSenders.has(e.from.email)
-    if (activeItem.folder === "trash") return isTrashed
+    if (activeItem.folder === "trash") return isTrashed && !isPermanentlyDeleted
     if (activeItem.folder === "junk") return !isTrashed && isSpam
     if (isTrashed || isSpam) return false
     const isRead = readIds.has(e.id)
@@ -262,7 +271,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </div>
           <div className="flex items-center gap-2">
             <SidebarInput
-              placeholder="Cari email..."
+              placeholder="Search emails..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -274,7 +283,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               onClick={() => void handleRefresh()}
               disabled={isRefreshing}
             >
-              <RefreshCwIcon className={isRefreshing ? "animate-spin" : ""} />
+              <RefreshCwIcon className={isRefreshing || isAutoRefreshing ? "animate-spin" : ""} />
             </Button>
           </div>
         </SidebarHeader>
@@ -284,19 +293,28 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               {filtered.length === 0 ? (
                 <p className="p-4 text-sm text-muted-foreground">
                   {activeItem.folder !== "inbox"
-                    ? `Folder ${activeItem.title} kosong.`
+                    ? `${activeItem.title} folder is empty.`
                     : activeAddress
-                      ? "Belum ada email."
-                      : "Pilih alamat untuk melihat inbox."}
+                      ? "No emails yet."
+                      : "Select an address to view inbox."}
                 </p>
               ) : (
-                filtered.map((email) => (
+                filtered.map((email) => {
+                  const addressPath = email.addressId.replace("/inbox/", "")
+                  const emailHref = activeFolder !== "inbox"
+                    ? `/inbox/${activeFolder}/${addressPath}/${email.id}`
+                    : `${email.addressId}/${email.id}`
+
+                  return (
                   <EmailContextMenu key={email.id} email={email}>
                     <Link
-                      href={`${email.addressId}/${email.id}`}
+                      href={emailHref}
                       className="flex min-w-0 flex-col items-start gap-2 overflow-hidden border-b p-4 text-sm leading-tight last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                     >
                       <div className="flex w-full min-w-0 items-center gap-2">
+                        {!email.isRead && (
+                          <span className="size-2 shrink-0 rounded-full bg-primary" aria-hidden />
+                        )}
                         <span className="min-w-0 truncate">
                           {email.from.name ?? email.from.email}
                         </span>
@@ -309,8 +327,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       </span>
                     </Link>
                   </EmailContextMenu>
-                ))
-              )}
+                )
+              }))}
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>

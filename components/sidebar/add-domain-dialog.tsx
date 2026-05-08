@@ -159,7 +159,7 @@ export default function AddDomainDialog({
   )
 
   const submitButton = (
-    <Button type="submit" disabled={isLoading}>
+    <Button type="submit" className="w-full" disabled={isLoading}>
       {isLoading && <Spinner data-icon="inline-start" />}
       {isVerified ? "Save Domain" : "Verify Domain"}
     </Button>
@@ -176,9 +176,6 @@ export default function AddDomainDialog({
           >
             <DrawerHeader>
               <DrawerTitle>Add a custom domain</DrawerTitle>
-              <DrawerDescription>
-                Point your domain's MX record.
-              </DrawerDescription>
             </DrawerHeader>
             <Separator />
             {body}
@@ -199,9 +196,6 @@ export default function AddDomainDialog({
         >
           <DialogHeader className="p-4">
             <DialogTitle>Add a custom domain</DialogTitle>
-            <DialogDescription>
-              Point your domain's MX record.
-            </DialogDescription>
           </DialogHeader>
           <Separator />
           {body}

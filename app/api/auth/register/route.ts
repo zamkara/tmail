@@ -22,7 +22,7 @@ export async function POST(req: Request) {
 
     const existing = await User.findOne({ email })
     if (existing) {
-      return NextResponse.json({ error: "Email sudah terdaftar" }, { status: 409 })
+      return NextResponse.json({ error: "Email already registered" }, { status: 409 })
     }
 
     const hashed = await bcrypt.hash(password, 12)
@@ -45,6 +45,6 @@ export async function POST(req: Request) {
     return res
   } catch (err) {
     console.error("[register]", err)
-    return NextResponse.json({ error: "Terjadi kesalahan server" }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -21,9 +21,9 @@ export default function CopyButton({ text }: CopyButtonProps) {
   async function handleCopy() {
     try {
       await copy(text)
-      toast.success("Alamat email disalin")
+      toast.success("Email address copied")
     } catch {
-      toast.error("Gagal menyalin alamat email")
+      toast.error("Failed to copy email address")
     }
   }
 
@@ -34,7 +34,7 @@ export default function CopyButton({ text }: CopyButtonProps) {
           type="button"
           variant="ghost"
           size="icon-xs"
-          aria-label="Salin alamat"
+          aria-label="Copy address"
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
@@ -44,7 +44,7 @@ export default function CopyButton({ text }: CopyButtonProps) {
           {copied ? <CheckIcon /> : <CopyIcon />}
         </Button>
       </TooltipTrigger>
-      <TooltipContent>Salin alamat</TooltipContent>
+      <TooltipContent>Copy address</TooltipContent>
     </Tooltip>
   )
 }
