@@ -389,10 +389,6 @@ function PreferenceContent({
           <Input id="account-password" type="password" />
         </Field>
       </FieldGroup>
-      <Separator />
-      <Button type="button" variant="destructive">
-        Delete account
-      </Button>
     </form>
   )
 }
@@ -411,7 +407,7 @@ function PreferenceSurface({
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange} direction="bottom">
-        <DrawerContent className="h-[74svh]">
+        <DrawerContent className="">
           <DrawerHeader className="px-4 pt-4">
             <DrawerTitle>Preference</DrawerTitle>
             <DrawerDescription>
@@ -431,7 +427,7 @@ function PreferenceSurface({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="p-0 sm:max-w-lg">
+      <DialogContent className="h-fit p-0">
         <DialogHeader className="px-4 pt-4">
           <DialogTitle>Preference</DialogTitle>
           <DialogDescription>
@@ -441,7 +437,10 @@ function PreferenceSurface({
         <div className="px-4 pb-4">
           <PreferenceContent user={user} />
         </div>
-        <DialogFooter className="px-4 pb-4">
+        <DialogFooter className="mx-auto my-auto w-full">
+          <Button type="button" variant="destructive">
+            Delete account
+          </Button>
           <Button type="button">Save changes</Button>
         </DialogFooter>
       </DialogContent>

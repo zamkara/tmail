@@ -63,7 +63,7 @@ export default function AddDomainDialog({
     event.preventDefault()
 
     if (!isValidDomain(normalizedName)) {
-      setError("Format domain tidak valid")
+      setError("Enter a valid domain — e.g. yourcompany.com")
       return
     }
 
@@ -74,13 +74,13 @@ export default function AddDomainDialog({
       if (!isVerified) {
         await verifyDomain(normalizedName)
         setVerifiedName(normalizedName)
-        toast.success("Domain terverifikasi")
+        toast.success("MX record confirmed")
         return
       }
 
       const domain = await addDomain(normalizedName)
       addDomainToStore(domain)
-      toast.success("Domain ditambahkan")
+      toast.success("Domain added successfully")
       setName("")
       setVerifiedName(null)
       setOpen(false)
@@ -88,7 +88,7 @@ export default function AddDomainDialog({
       const message =
         caughtError instanceof Error
           ? caughtError.message
-          : "Gagal menambahkan domain"
+          : "Something went wrong. Try again."
       setError(message)
       toast.error(message)
     } finally {
@@ -102,10 +102,10 @@ export default function AddDomainDialog({
       variant="outline"
       size={iconOnly ? "icon-sm" : "sm"}
       className={cn(!iconOnly && "w-full", className)}
-      aria-label="Tambah domain"
+      aria-label="Add domain"
     >
       <PlusIcon data-icon={iconOnly ? undefined : "inline-start"} />
-      {!iconOnly && "Tambah Domain"}
+      {!iconOnly && "Add Domain"}
     </Button>
   )
 
@@ -114,11 +114,10 @@ export default function AddDomainDialog({
       <div className="flex flex-col gap-4 p-4">
         <FieldGroup className="pt-1">
           <Field data-invalid={Boolean(error)}>
-            <FieldLabel htmlFor="domain-name">Domain name</FieldLabel>
             <Input
               id="domain-name"
               value={name}
-              placeholder="your-domain.com"
+              placeholder="yourcompany.com"
               aria-invalid={Boolean(error)}
               disabled={isLoading}
               onChange={(event) => {
@@ -131,7 +130,7 @@ export default function AddDomainDialog({
             {isVerified && (
               <p className="flex items-center gap-1 text-sm text-muted-foreground">
                 <CheckIcon className="size-4 text-primary" />
-                MX domain sudah cocok.
+                MX record looks good.
               </p>
             )}
           </Field>
@@ -139,15 +138,14 @@ export default function AddDomainDialog({
 
         <section className="flex flex-col gap-3 rounded-lg border bg-muted/40 p-3 text-sm">
           <div className="flex flex-col gap-1">
-            <h3 className="font-medium">DNS yang harus dibuat</h3>
+            <h3 className="font-medium">DNS configuration required</h3>
             <p className="text-muted-foreground">
-              Buat MX untuk domain yang kamu masukkan. A/AAAA/CNAME website
-              tidak perlu dihapus.
+              Add an MX record pointing to the address below.
             </p>
           </div>
           <div className="overflow-hidden rounded-lg border bg-background text-xs">
             <DnsRow label="Type" value="MX" />
-            <DnsRow label="Host" value="@ atau subdomain" />
+            <DnsRow label="Host" value="@ or subdomain" />
             <DnsRow
               label="Value"
               value={MAIL_SERVER_HOST || "mx.thvuinin.my.id"}
@@ -163,7 +161,7 @@ export default function AddDomainDialog({
   const submitButton = (
     <Button type="submit" disabled={isLoading}>
       {isLoading && <Spinner data-icon="inline-start" />}
-      {isVerified ? "Simpan Domain" : "Verifikasi Domain"}
+      {isVerified ? "Save Domain" : "Verify Domain"}
     </Button>
   )
 
@@ -171,19 +169,15 @@ export default function AddDomainDialog({
     return (
       <Drawer open={open} onOpenChange={setOpen} direction="bottom">
         <DrawerTrigger asChild>{trigger}</DrawerTrigger>
-        <DrawerContent className="h-[82svh] w-full overflow-hidden">
+        <DrawerContent className="w-full overflow-hidden">
           <form
             className="flex min-h-0 flex-1 flex-col"
             onSubmit={(event) => void handleSubmit(event)}
           >
             <DrawerHeader>
-              <DrawerTitle>Tambah domain custom</DrawerTitle>
+              <DrawerTitle>Add a custom domain</DrawerTitle>
               <DrawerDescription>
-                Masukkan domain yang DNS MX-nya mengarah ke{" "}
-                <code className="rounded bg-muted px-1 text-xs">
-                  {MAIL_SERVER_HOST || "mx.thvuinin.my.id"}
-                </code>
-                .
+                Point your domain's MX record.
               </DrawerDescription>
             </DrawerHeader>
             <Separator />
@@ -198,19 +192,15 @@ export default function AddDomainDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-h-[min(720px,calc(100svh-2rem))] overflow-hidden p-0 sm:max-w-xl">
+      <DialogContent className="overflow-hidden p-0">
         <form
-          className="flex max-h-[min(720px,calc(100svh-2rem))] min-h-0 flex-col"
+          className="flex min-h-0 flex-col"
           onSubmit={(event) => void handleSubmit(event)}
         >
-          <DialogHeader className="p-4 pb-3">
-            <DialogTitle>Tambah domain custom</DialogTitle>
+          <DialogHeader className="p-4">
+            <DialogTitle>Add a custom domain</DialogTitle>
             <DialogDescription>
-              Masukkan domain yang DNS MX-nya mengarah ke{" "}
-              <code className="rounded bg-muted px-1 text-xs">
-                {MAIL_SERVER_HOST || "mx.thvuinin.my.id"}
-              </code>
-              .
+              Point your domain's MX record.
             </DialogDescription>
           </DialogHeader>
           <Separator />
