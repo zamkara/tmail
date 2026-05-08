@@ -17,28 +17,28 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-deploy-bluegreen-clipboard-fallback"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-lazy-mongodb-clipboard-fallback"
 
 git checkout -b "$BRANCH_NAME"
 
 git add -A
 
-COMMIT_MSG="fix: Blue-green deploy, clipboard fallback, Containerfile port/env fixes
+COMMIT_MSG="fix: Lazy MONGODB_URI check, clipboard fallback for non-HTTPS, deploy.sh error visibility
 
 Perubahan utama:
-- deploy.sh: blue-green deployment (temp port → health check → migrate → cleanup)
-- deploy.sh: IP detection otomatis via `ip -4 addr show`, fallback hostname -I, fallback localhost
-- deploy.sh: env-file (.env.local) dan TM_ prefixed vars di-pass ke container
-- deploy.sh: cleanup dangling images pake podman rmi -f (force remove build cache)
-- Containerfile: ENV PORT=8901 agar next start listen di port yg benar
-- Containerfile: copy pnpm-lock.yaml ke runner stage, hindari pnpm auto-install
-- Containerfile: CMD pake node langsung (bypass pnpm runtime install)
+- lib/db.ts: pindah MONGODB_URI check ke dalam connectDB() agar tidak throw saat build time (module evaluation)
 - hooks/use-copy.ts: fallback document.execCommand('copy') untuk non-secure context (HTTP via IP)
+- deploy.sh: tampilkan non-progress lines dari podman build (error/warning tidak ketelen)
+- Containerfile: ENV PORT=8901, copy pnpm-lock.yaml ke runner, CMD pake node langsung
+- deploy.sh: blue-green deploy (temp port → health check → migrate → cleanup)
+- deploy.sh: IP detection via ip -4 addr show / hostname -I / localhost
+- deploy.sh: env-file (.env.local) dan TM_ prefixed vars di-pass ke container
+- deploy.sh: cleanup dangling images pake podman rmi -f
 
 Testing:
-- [ ] deploy.sh berjalan: build → start temp port → health check → stop old → migrate → cleanup
-- [ ] podman images bersih, tidak ada dangling <none> dari intermediate build
-- [ ] Copy email address berhasil via http://192.168.1.76:8901 (non-HTTPS)
+- [ ] next build di container berhasil tanpa MONGODB_URI
+- [ ] Copy email address berhasil via http://<ip>:8901
+- [ ] deploy.sh error messages kelihatan di terminal
 "
 
 git commit -m "$COMMIT_MSG"

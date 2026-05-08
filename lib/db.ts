@@ -1,10 +1,5 @@
 import mongoose from "mongoose"
 
-const MONGODB_URI = process.env.MONGODB_URI!
-
-if (!MONGODB_URI) throw new Error("MONGODB_URI tidak ditemukan di .env.local")
-
-// Cache koneksi agar tidak reconnect di setiap request (Next.js hot reload)
 const cached = global as typeof global & {
   mongoose?: { conn: typeof mongoose | null; promise: Promise<typeof mongoose> | null }
 }
@@ -14,6 +9,9 @@ if (!cached.mongoose) {
 }
 
 export async function connectDB() {
+  const MONGODB_URI = process.env.MONGODB_URI
+  if (!MONGODB_URI) throw new Error("MONGODB_URI tidak ditemukan di .env.local")
+
   if (cached.mongoose!.conn) return cached.mongoose!.conn
 
   if (!cached.mongoose!.promise) {
