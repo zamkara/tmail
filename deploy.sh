@@ -52,6 +52,9 @@ podman build -t "$IMAGE_NAME" . 2>&1 | while IFS= read -r line; do
     STEP_MSG=$(echo "$line" | sed 's/\[[0-9]*\/[0-9]*\] //')
     P=$(( CURRENT * 100 / TOTAL ))
     printf "\r\033[K[%3d/%3d] %3d%% %s" "$CURRENT" "$TOTAL" "$P" "$STEP_MSG"
+  else
+    # Show non-progress lines (errors, warnings, etc.)
+    printf "\r\033[K  %s\n" "$line"
   fi
 done
 
