@@ -17,28 +17,28 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-lazy-mongodb-fresh-base"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-guest-page-aurora-domain-refactor"
 
 git checkout -b "$BRANCH_NAME"
 
 git add -A
 
-COMMIT_MSG="fix: Lazy MONGODB_URI check, clipboard fallback, fresh base image per deploy
+COMMIT_MSG="feat: Guest page with aurora effect, domain API refactor, purple theme
 
 Perubahan utama:
-- lib/db.ts: pindah MONGODB_URI check ke dalam connectDB() agar tidak throw saat build time
-- app/api/auth/login/route.ts: cookie secure flag deteksi dari req.url, bukan NODE_ENV
-- app/api/auth/register/route.ts: same fix
-- hooks/use-copy.ts: fallback document.execCommand('copy') untuk non-secure context (HTTP via IP)
-- deploy.sh: hapus base image setiap deploy agar selalu pull fresh
-- deploy.sh: tampilkan non-progress lines dari podman build
-- Containerfile: ENV PORT=8901, copy pnpm-lock.yaml ke runner, CMD pake node langsung
-- deploy.sh: blue-green deploy, IP detection, env-file pass, cleanup dangling images
+- app/page.tsx: ganti redirect /inbox jadi guest page dengan aurora + email workspace
+- stores/aurora.store.ts: store untuk trigger aurora 8 detik saat email baru
+- components/guest/: komponen guest page (navbar, mail workspace, mail list, mail preview)
+- components/shared/aurora.tsx: WebGL aurora background component
+- app/api/domains/route.ts: refactor getSystemDomains() dengan timeout + error handling
+- app/globals.css: ubah hue dari 277 ke 310 (purple tone)
+- services/domain.service.ts: perbaikan fetch domain service
+- proxy.ts: fix proxy
 
 Testing:
-- [ ] Login → refresh → masih login, bukan guest lagi
-- [ ] next build di container berhasil tanpa MONGODB_URI
-- [ ] Copy clipboard berhasil via HTTP (non-HTTPS)
+- [ ] Guest page tampil tanpa login
+- [ ] Aurora muncul 8 detik saat email baru masuk
+- [ ] Domain list fallback ke system domains jika API timeout
 "
 
 git commit -m "$COMMIT_MSG"
