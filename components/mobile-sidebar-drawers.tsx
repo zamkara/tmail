@@ -199,7 +199,9 @@ export function MobileInboxDrawerTrigger() {
       <DrawerContent className="h-[78svh] w-full">
         <DrawerHeader>
           <DrawerTitle>Inbox</DrawerTitle>
-          <DrawerDescription>List of folders and incoming emails.</DrawerDescription>
+          <DrawerDescription>
+            List of folders and incoming emails.
+          </DrawerDescription>
         </DrawerHeader>
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex items-center gap-2 border-b p-3">
@@ -216,7 +218,11 @@ export function MobileInboxDrawerTrigger() {
               onClick={() => void refreshMails()}
               disabled={isRefreshing}
             >
-              <RefreshCwIcon className={cn((isRefreshing || isAutoRefreshing) && "animate-spin")} />
+              <RefreshCwIcon
+                className={cn(
+                  (isRefreshing || isAutoRefreshing) && "animate-spin"
+                )}
+              />
             </Button>
           </div>
           <ScrollArea className="min-h-0 flex-1">
@@ -235,32 +241,37 @@ export function MobileInboxDrawerTrigger() {
               ) : (
                 filtered.map((email) => {
                   const addressPath = email.addressId.replace("/inbox/", "")
-                  const emailHref = activeFolder !== "inbox"
-                    ? `/inbox/${activeFolder}/${addressPath}/${email.id}`
-                    : `${email.addressId}/${email.id}`
+                  const emailHref =
+                    activeFolder !== "inbox"
+                      ? `/inbox/${activeFolder}/${addressPath}/${email.id}`
+                      : `${email.addressId}/${email.id}`
 
                   return (
-                  <EmailContextMenu key={email.id} email={email}>
-                    <Link
-                      href={emailHref}
-                      className="flex flex-col items-start gap-2 border-b p-4 text-left text-sm leading-tight last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    >
-                    <span className="flex w-full items-center gap-2">
-                      {!email.isRead && (
-                        <span className="size-2 shrink-0 rounded-full bg-primary" aria-hidden />
-                      )}
-                      <span className="truncate">
-                        {email.from.name ?? email.from.email}
-                      </span>
-                      <span className="ml-auto shrink-0 text-xs">
-                        {formatRelativeInboxTime(email.receivedAt)}
-                      </span>
-                    </span>
-                      <span className="font-medium">{email.subject}</span>
-                    </Link>
-                  </EmailContextMenu>
-                )
-              }))}
+                    <EmailContextMenu key={email.id} email={email}>
+                      <Link
+                        href={emailHref}
+                        className="flex flex-col items-start gap-2 border-b p-4 text-left text-sm leading-tight last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      >
+                        <span className="flex w-full items-center gap-2">
+                          {!email.isRead && (
+                            <span
+                              className="size-2 shrink-0 rounded-full bg-primary"
+                              aria-hidden
+                            />
+                          )}
+                          <span className="truncate">
+                            {email.from.name ?? email.from.email}
+                          </span>
+                          <span className="ml-auto shrink-0 text-xs">
+                            {formatRelativeInboxTime(email.receivedAt)}
+                          </span>
+                        </span>
+                        <span className="font-medium">{email.subject}</span>
+                      </Link>
+                    </EmailContextMenu>
+                  )
+                })
+              )}
             </div>
           </ScrollArea>
           <nav className="flex shrink-0 flex-row items-center justify-center gap-2 border-t bg-popover p-3">

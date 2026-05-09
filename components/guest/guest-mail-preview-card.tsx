@@ -45,7 +45,7 @@ export default function GuestMailPreviewCard({
   const senderName = email?.from.name ?? email?.from.email
 
   return (
-    <Card className="min-h-130 bg-card/80 lg:h-full lg:min-h-0">
+    <Card className="min-h-130 bg-card/80 backdrop-blur-2xl lg:h-full lg:min-h-0">
       <CardHeader className="border-b">
         <CardTitle className="truncate">
           {email?.subject ?? "Paper mail"}

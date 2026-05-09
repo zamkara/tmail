@@ -10,6 +10,7 @@ interface AddressStore {
   setAddresses: (addresses: GeneratedAddress[]) => void
   setLoaded: () => void
   addAddress: (address: GeneratedAddress) => void
+  updateAddress: (id: string, partial: Partial<GeneratedAddress>) => void
   setActiveAddress: (id: string | null) => void
   removeExpired: () => void
 }
@@ -30,6 +31,12 @@ export const useAddressStore = create<AddressStore>()(
             ),
             address,
           ],
+        })),
+      updateAddress: (id, partial) =>
+        set((state) => ({
+          addresses: state.addresses.map((addr) =>
+            addr.id === id ? { ...addr, ...partial } : addr
+          ),
         })),
       setActiveAddress: (id) => set({ activeAddressId: id }),
       removeExpired: () =>

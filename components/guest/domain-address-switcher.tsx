@@ -1,7 +1,9 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { GlobeIcon, MailIcon, RefreshCwIcon } from "lucide-react"
+import Link from "next/link"
+import { GlobeIcon, LogIn, MailIcon, Plus, RefreshCwIcon, SearchIcon } from "lucide-react"
+import { Command as CommandPrimitive } from "cmdk"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -10,10 +12,10 @@ import {
   CommandDialog,
   CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
+import { InputGroup, InputGroupAddon } from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
 import { generateAddress } from "@/services/address.service"
 import { getDomains } from "@/services/domain.service"
@@ -43,10 +45,22 @@ function findReusableAddress(addresses: GeneratedAddress[], domainId: string) {
   )
 }
 
-export default function DomainAddressSwitcher() {
+interface DomainAddressSwitcherProps {
+  hideGenerate?: boolean
+}
+
+export default function DomainAddressSwitcher({ hideGenerate }: DomainAddressSwitcherProps) {
   const [open, setOpen] = useState(false)
   const [isLoadingDomains, setIsLoadingDomains] = useState(true)
   const [loadingDomainId, setLoadingDomainId] = useState<string | null>(null)
+  const [showLogin, setShowLogin] = useState(true)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setShowLogin((prev) => !prev)
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [])
 
   const domains = useDomainStore((state) => state.domains)
   const setDomains = useDomainStore((state) => state.setDomains)
@@ -175,12 +189,12 @@ export default function DomainAddressSwitcher() {
 
   return (
     <>
-      <div className="flex w-full max-w-full items-center gap-1 sm:w-72">
+      <div className="flex w-full max-w-full items-center gap-1">
         <Button
           type="button"
-          variant="outline"
+          variant="default"
           size="lg"
-          className="min-w-0 flex-1 justify-start"
+          className="min-w-0 flex-1"
           aria-haspopup="dialog"
           aria-expanded={open}
           onClick={() => setOpen(true)}
@@ -188,25 +202,30 @@ export default function DomainAddressSwitcher() {
         >
           {isLoadingDomains ? (
             <Spinner data-icon="inline-start" />
-          ) : (
-            <MailIcon data-icon="inline-start" />
-          )}
+          ) : null}
           <span className="min-w-0 flex-1 truncate text-left">
             {isLoadingDomains
               ? "Loading domains..."
-              : activeAddress?.address ?? "Select address"}
+              : (activeAddress?.address ?? "Select address")}
           </span>
+          {!isLoadingDomains ? (
+            <MailIcon className="size-4" data-icon="inline-end" />
+          ) : null}
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-lg"
-          aria-label="Generate random email address"
-          disabled={isSelectingDomain || isLoadingDomains || sortedDomains.length === 0}
-          onClick={() => void handleGenerateRandomAddress()}
-        >
-          {isSelectingDomain ? <Spinner /> : <RefreshCwIcon />}
-        </Button>
+        {!hideGenerate && (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-lg"
+            aria-label="Generate random email address"
+            disabled={
+              isSelectingDomain || isLoadingDomains || sortedDomains.length === 0
+            }
+            onClick={() => void handleGenerateRandomAddress()}
+          >
+            {isSelectingDomain ? <Spinner /> : <RefreshCwIcon />}
+          </Button>
+        )}
       </div>
 
       <CommandDialog
@@ -217,15 +236,59 @@ export default function DomainAddressSwitcher() {
         className="sm:max-w-md"
       >
         <Command>
-          <CommandInput placeholder="Search domain..." />
+          <div className="flex items-center gap-2 p-1 pb-0">
+            <InputGroup className="flex-1 h-8! rounded-lg! border-input/30 bg-input/30 shadow-none! *:data-[slot=input-group-addon]:pl-2!">
+              <CommandPrimitive.Input
+                data-slot="command-input"
+                className="w-full text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Search domain..."
+              />
+              <InputGroupAddon>
+                <SearchIcon className="shrink-0 opacity-50" />
+              </InputGroupAddon>
+            </InputGroup>
+            <Button variant="default" size="default" asChild className="shrink-0">
+              <Link href="/inbox" className="relative overflow-hidden">
+                {showLogin ? (
+                  <LogIn className="size-4" />
+                ) : (
+                  <Plus className="size-4" />
+                )}
+                <span className="relative h-5 w-22 overflow-hidden">
+                  <span
+                    className={`absolute inset-0 flex items-center transition-all duration-500 ${
+                      showLogin
+                        ? "translate-y-0 opacity-100"
+                        : "-translate-y-full opacity-0"
+                    }`}
+                  >
+                    Login
+                  </span>
+                  <span
+                    className={`absolute inset-0 flex items-center transition-all duration-500 ${
+                      showLogin
+                        ? "translate-y-full opacity-0"
+                        : "translate-y-0 opacity-100"
+                    }`}
+                  >
+                    Add Domain
+                  </span>
+                </span>
+              </Link>
+            </Button>
+          </div>
           <CommandList>
             {isLoadingDomains ? (
               <div className="flex items-center justify-center py-8">
                 <Spinner className="mr-2" />
-                <span className="text-sm text-muted-foreground">Loading domains...</span>
+                <span className="text-sm text-muted-foreground">
+                  Loading domains...
+                </span>
               </div>
             ) : sortedDomains.length === 0 ? (
-              <CommandEmpty>No domains available. Check server connection.</CommandEmpty>
+              <CommandEmpty>
+                No domains available. Check server connection.
+              </CommandEmpty>
             ) : (
               <>
                 <CommandEmpty>No domains found.</CommandEmpty>
