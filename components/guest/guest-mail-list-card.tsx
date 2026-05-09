@@ -50,7 +50,7 @@ export default function GuestMailListCard({
   onSelectEmail,
 }: GuestMailListCardProps) {
   return (
-    <Card className="order-first min-h-80 bg-card/80 lg:order-last lg:h-full lg:min-h-0">
+    <Card className="order-first min-h-80 bg-linear-to-b from-card/80 via-card/80 to-card/80 backdrop-blur-lg transition-all duration-500 ease-in-out hover:bg-linear-to-b hover:from-card/80 hover:via-card/80 hover:to-primary/20 lg:order-last lg:h-full lg:min-h-0">
       <CardHeader className="border-b">
         <CardTitle>Inbox</CardTitle>
         <CardAction>

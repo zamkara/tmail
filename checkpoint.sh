@@ -17,28 +17,40 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-guest-page-aurora-domain-refactor"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-pixelblast-decryptedtext-navbar-logo"
 
 git checkout -b "$BRANCH_NAME"
 
 git add -A
 
-COMMIT_MSG="feat: Guest page with aurora effect, domain API refactor, purple theme
+COMMIT_MSG="feat: PixelBlast background, DecryptedText animation, navbar logo, inbox refactor
 
 Perubahan utama:
-- app/page.tsx: ganti redirect /inbox jadi guest page dengan aurora + email workspace
-- stores/aurora.store.ts: store untuk trigger aurora 8 detik saat email baru
-- components/guest/: komponen guest page (navbar, mail workspace, mail list, mail preview)
-- components/shared/aurora.tsx: WebGL aurora background component
-- app/api/domains/route.ts: refactor getSystemDomains() dengan timeout + error handling
-- app/globals.css: ubah hue dari 277 ke 310 (purple tone)
-- services/domain.service.ts: perbaikan fetch domain service
-- proxy.ts: fix proxy
+- components/shared/pixel-blast.tsx + .css: WebGL pixel shader background (React Bits)
+- components/shared/decrypted-text.tsx: Decrypt animation component (React Bits)
+- components/guest/guest-navbar.tsx: Inline SVG logo (ic_tmail) di kiri, justify-between layout
+- public/ic_tmail.svg: fill #000000 jadi currentColor biar ngikut theme
+- app/page.tsx: PikselBlast ganti Particles, main flex-col + center
+- app/signin/page.tsx: PikselBlast background, bg-background
+- components/guest/guest-mail-workspace.tsx: Refactor inbox (expand/collapse, Card layout, search, decrypted address text, willcard switch)
+- components/guest/domain-address-switcher.tsx: Dialog redesain (search bar, Login/Add Domain button, hideGenerate prop)
+- components/guest/guest-mail-list-card.tsx: Gradient bg + hover effect
+- components/guest/guest-mail-preview-card.tsx: backdrop-blur
+- components/mobile-sidebar-drawers.tsx: Restructure, add login check + fetch per address
+- components/shared/copy-button.tsx: Styling adjustment
+- components/theme-provider.tsx: Guard event.key undefined di hotkey
+- components/ui/sidebar.tsx: Fix Tailwind v4 calc() warnings (left-[calc...] -> -left-(--...))
+- stores/address.store.ts: Add addAddress, updateAddress, removeExpired, setActiveAddress
+- package.json: Add motion, three, postprocessing, @types/three dependencies
 
 Testing:
-- [ ] Guest page tampil tanpa login
-- [ ] Aurora muncul 8 detik saat email baru masuk
-- [ ] Domain list fallback ke system domains jika API timeout
+- [ ] Guest page tampil dengan PixelBlast background
+- [ ] DecryptedText animasi saat ganti address
+- [ ] Navbar logo muncul di kiri, theme toggle di kanan
+- [ ] Domain dialog login/add domain button animation
+- [ ] Inbox expand/collapse works
+- [ ] Signin page has PixelBlast background
+- [ ] Theme hotkey tidak error di signin page
 "
 
 git commit -m "$COMMIT_MSG"

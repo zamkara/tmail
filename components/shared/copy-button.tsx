@@ -13,9 +13,10 @@ import { useCopy } from "@/hooks/use-copy"
 
 interface CopyButtonProps {
   text: string
+  className?: string
 }
 
-export default function CopyButton({ text }: CopyButtonProps) {
+export default function CopyButton({ text, className }: CopyButtonProps) {
   const { copied, copy } = useCopy()
 
   async function handleCopy() {
@@ -33,7 +34,8 @@ export default function CopyButton({ text }: CopyButtonProps) {
         <Button
           type="button"
           variant="ghost"
-          size="icon-xs"
+          size="icon"
+          className={className}
           aria-label="Copy address"
           onClick={(event) => {
             event.preventDefault()

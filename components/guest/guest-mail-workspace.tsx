@@ -1,12 +1,40 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  InboxIcon,
+  MailOpenIcon,
+  RefreshCwIcon,
+  SearchIcon,
+  XIcon,
+  AstroidIcon,
+} from "lucide-react"
+import { toast } from "sonner"
 
-import GuestMailListCard from "@/components/guest/guest-mail-list-card"
-import GuestMailPreviewCard from "@/components/guest/guest-mail-preview-card"
-import { parseInboxSender } from "@/lib/inbox"
+import CopyButton from "@/components/shared/copy-button"
+import DecryptedText from "@/components/shared/decrypted-text"
+import DomainAddressSwitcher from "@/components/guest/domain-address-switcher"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
+import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { InputGroup, InputGroupAddon } from "@/components/ui/input-group"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
+import { Spinner } from "@/components/ui/spinner"
+import { cn } from "@/lib/utils"
+import { formatRelativeInboxTime, parseInboxSender } from "@/lib/inbox"
 import { useAddressStore } from "@/stores/address.store"
 import { useAuroraStore } from "@/stores/aurora.store"
+import { useDomainStore } from "@/stores/domain.store"
 import { useInboxStore } from "@/stores/inbox.store"
 import type { EmailDetail, EmailItem, GeneratedAddress } from "@/types"
 
@@ -104,14 +132,20 @@ export default function GuestMailWorkspace() {
   const removeExpired = useAddressStore((state) => state.removeExpired)
   const readIds = useInboxStore((state) => state.readIds)
   const markRead = useInboxStore((state) => state.markRead)
+  const resetInbox = useInboxStore((state) => state.resetInbox)
+  const domains = useDomainStore((state) => state.domains)
+  const addAddress = useAddressStore((state) => state.addAddress)
+  const updateAddress = useAddressStore((state) => state.updateAddress)
+  const setActiveAddress = useAddressStore((state) => state.setActiveAddress)
 
   const [emails, setEmails] = useState<EmailItem[]>([])
-  const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null)
-  const [selectedEmail, setSelectedEmail] = useState<EmailDetail | null>(null)
-  const [isListLoading, setIsListLoading] = useState(false)
-  const [isDetailLoading, setIsDetailLoading] = useState(false)
-  const [listError, setListError] = useState<string | null>(null)
-  const [detailError, setDetailError] = useState<string | null>(null)
+  const [expandedEmailId, setExpandedEmailId] = useState<string | null>(null)
+  const [emailDetails, setEmailDetails] = useState<Record<string, EmailDetail>>(
+    {}
+  )
+  const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const prevEmailCountRef = useRef(0)
   const triggerAurora = useAuroraStore((state) => state.trigger)
 
@@ -131,14 +165,14 @@ export default function GuestMailWorkspace() {
   const loadEmails = useCallback(async () => {
     if (!activeAddress) {
       setEmails([])
-      setSelectedEmailId(null)
-      setSelectedEmail(null)
-      setListError(null)
+      setExpandedEmailId(null)
+      setEmailDetails({})
+      setError(null)
       return
     }
 
-    setIsListLoading(true)
-    setListError(null)
+    setIsLoading(true)
+    setError(null)
 
     try {
       const data = await fetchJsonWithTimeout<unknown>(
@@ -156,9 +190,9 @@ export default function GuestMailWorkspace() {
       setEmails(nextEmails)
     } catch {
       setEmails([])
-      setListError("Failed to load inbox.")
+      setError("Failed to load inbox.")
     } finally {
-      setIsListLoading(false)
+      setIsLoading(false)
     }
   }, [activeAddress, readIds])
 
@@ -175,57 +209,539 @@ export default function GuestMailWorkspace() {
   }, [activeAddress, loadEmails])
 
   useEffect(() => {
-    setSelectedEmailId(null)
-    setSelectedEmail(null)
-    setDetailError(null)
+    setExpandedEmailId(null)
+    setEmailDetails({})
+    setError(null)
   }, [activeAddress?.id])
 
-  async function handleSelectEmail(email: EmailItem) {
+  async function handleToggleEmail(email: EmailItem) {
     if (!activeAddress) return
 
-    setSelectedEmailId(email.id)
-    setSelectedEmail(null)
-    setIsDetailLoading(true)
-    setDetailError(null)
+    if (expandedEmailId === email.id) {
+      setExpandedEmailId(null)
+      return
+    }
 
-    try {
-      const data = await fetchJsonWithTimeout<BeInboxItem>(
-        `/api/inbox/${email.id}`
-      )
-      const detail = mapEmailDetail(data, activeAddress)
-      setSelectedEmail(detail)
-      markRead(email.id)
-      setEmails((currentEmails) =>
-        currentEmails.map((currentEmail) =>
-          currentEmail.id === email.id
-            ? { ...currentEmail, isRead: true }
-            : currentEmail
+    setExpandedEmailId(email.id)
+    setLoadingDetailId(email.id)
+
+    if (!emailDetails[email.id]) {
+      try {
+        const data = await fetchJsonWithTimeout<BeInboxItem>(
+          `/api/inbox/${email.id}`
         )
-      )
-    } catch {
-      setDetailError("Failed to open email.")
-    } finally {
-      setIsDetailLoading(false)
+        const detail = mapEmailDetail(data, activeAddress)
+        setEmailDetails((prev) => ({ ...prev, [email.id]: detail }))
+        markRead(email.id)
+        setEmails((currentEmails) =>
+          currentEmails.map((currentEmail) =>
+            currentEmail.id === email.id
+              ? { ...currentEmail, isRead: true }
+              : currentEmail
+          )
+        )
+      } catch {
+        setExpandedEmailId(null)
+      } finally {
+        setLoadingDetailId(null)
+      }
+    } else {
+      setLoadingDetailId(null)
     }
   }
 
+  async function handleWillcardSubdomain(withSubdomain?: boolean) {
+    setIsWillcardLoading(true)
+    const shouldUseSubdomain = withSubdomain ?? useSubdomain
+    try {
+      const guestDomains = domains.filter((d) => d.type === "system")
+      if (guestDomains.length === 0) {
+        toast.error("No domains available")
+        return
+      }
+      const picked =
+        guestDomains[Math.floor(Math.random() * guestDomains.length)]
+      const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+      const randomLocal = Array.from(
+        { length: 6 },
+        () => chars[Math.floor(Math.random() * chars.length)]
+      ).join("")
+      const randomSub = Array.from(
+        { length: 5 },
+        () => chars[Math.floor(Math.random() * chars.length)]
+      ).join("")
+      const now = new Date()
+      const address: GeneratedAddress = {
+        id: `local_${Date.now()}`,
+        address: shouldUseSubdomain
+          ? `${randomLocal}@${randomSub}.${picked.name}`
+          : `${randomLocal}@${picked.name}`,
+        domainId: picked.id,
+        domainName: picked.name,
+        username: null,
+        createdAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+      }
+      resetInbox()
+      addAddress(address)
+      setActiveAddress(address.id)
+      toast.success(
+        shouldUseSubdomain ? "Wildcard address generated" : "Address generated"
+      )
+    } catch {
+      toast.error("Failed to enable wildcard subdomain")
+    } finally {
+      setIsWillcardLoading(false)
+    }
+  }
+
+  const [searchQuery, setSearchQuery] = useState("")
+  const [isMac, setIsMac] = useState(false)
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setIsMac(navigator.platform.toLowerCase().includes("mac"))
+  }, [])
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault()
+        searchRef.current?.focus()
+      }
+      if (e.key === "Escape") {
+        setSearchQuery("")
+        searchRef.current?.blur()
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [])
+
+  const filteredEmails = useMemo(
+    () =>
+      searchQuery
+        ? emails.filter((email) => {
+            const q = searchQuery.toLowerCase()
+            const sender = (email.from.name ?? email.from.email).toLowerCase()
+            return (
+              sender.includes(q) ||
+              email.subject.toLowerCase().includes(q) ||
+              email.snippet.toLowerCase().includes(q)
+            )
+          })
+        : emails,
+    [emails, searchQuery]
+  )
+
+  const [editAddress, setEditAddress] = useState<string | null>(null)
+  const [editLocalValue, setEditLocalValue] = useState("")
+  const [editSubdomainValue, setEditSubdomainValue] = useState<string | null>(
+    null
+  )
+  const [editRootDomain, setEditRootDomain] = useState("")
+
+  function startAddressEdit() {
+    if (!activeAddress) return
+    const domainEntry = domains.find((d) => d.id === activeAddress.domainId)
+    const rootDomain = domainEntry?.name ?? ""
+    const fullDomain = activeAddress.address.split("@")[1]
+    setEditLocalValue(activeAddress.address.split("@")[0])
+    if (fullDomain.endsWith(rootDomain) && fullDomain !== rootDomain) {
+      setEditSubdomainValue(fullDomain.slice(0, -rootDomain.length - 1))
+    } else {
+      setEditSubdomainValue("")
+    }
+    setEditRootDomain(rootDomain)
+    setEditAddress(activeAddress.id)
+  }
+
+  function saveAddressEdit() {
+    if (!activeAddress) return
+    const rebuilt =
+      editSubdomainValue !== null
+        ? `${editLocalValue}@${editSubdomainValue}.${editRootDomain}`
+        : `${editLocalValue}@${editRootDomain}`
+    updateAddress(activeAddress.id, { address: rebuilt })
+    setEditAddress(null)
+  }
+
+  const [useSubdomain, setUseSubdomain] = useState(false)
+
+  const [isWillcardLoading, setIsWillcardLoading] = useState(false)
+
   return (
-    <div className="mx-auto grid min-h-[calc(100svh-6rem)] w-full max-w-7xl grid-cols-1 gap-4 lg:h-[calc(90svh-6rem)] lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
-      <GuestMailPreviewCard
-        activeAddress={activeAddress}
-        email={selectedEmail}
-        isLoading={isDetailLoading}
-        error={detailError}
-      />
-      <GuestMailListCard
-        activeAddress={activeAddress}
-        emails={emails}
-        selectedEmailId={selectedEmailId}
-        isLoading={isListLoading}
-        error={listError}
-        onRefresh={() => void loadEmails()}
-        onSelectEmail={(email) => void handleSelectEmail(email)}
-      />
+    <div className="mx-auto flex w-full max-w-4xl flex-col justify-center gap-4">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 rounded-xl border bg-card p-4 text-card-foreground shadow">
+        {activeAddress ? (
+          <>
+            <div className="flex items-center gap-2 rounded-lg border bg-muted py-2 ps-4 pe-2">
+              {editAddress ? (
+                <div
+                  className="flex min-w-0 flex-1 items-center gap-0 text-lg"
+                  onBlur={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                      saveAddressEdit()
+                    }
+                  }}
+                >
+                  <input
+                    type="text"
+                    value={editLocalValue}
+                    onChange={(e) => setEditLocalValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveAddressEdit()
+                      if (e.key === "Escape") setEditAddress(null)
+                    }}
+                    className="max-w-[40%] min-w-0 bg-transparent outline-hidden"
+                    autoFocus
+                  />
+                  <span className="shrink-0 text-muted-foreground">@</span>
+                  <input
+                    type="text"
+                    value={editSubdomainValue ?? ""}
+                    onChange={(e) => setEditSubdomainValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveAddressEdit()
+                      if (e.key === "Escape") setEditAddress(null)
+                    }}
+                    className="max-w-[40%] min-w-0 bg-transparent outline-hidden"
+                  />
+                  <span className="shrink-0 text-muted-foreground">.</span>
+                  <span className="shrink-0 text-muted-foreground">
+                    {editRootDomain}
+                  </span>
+                </div>
+              ) : (
+                <span
+                  className="min-w-0 flex-1 cursor-text truncate text-xl"
+                  onClick={() => startAddressEdit()}
+                >
+                  <DecryptedText
+                    key={activeAddress.address}
+                    text={activeAddress.address}
+                    animateOn="view"
+                    speed={40}
+                    maxIterations={15}
+                    characters="abcdefghijklmnopqrstuvwxyz0123456789@."
+                    className=""
+                    encryptedClassName=""
+                  />
+                </span>
+              )}
+              <Card className="rounded-md px-4 py-0 text-primary dark:text-foreground">
+                <CopyButton text={activeAddress.address} className="size-10" />
+              </Card>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <DomainAddressSwitcher hideGenerate />
+              <div
+                role="button"
+                tabIndex={!activeAddress || isWillcardLoading ? -1 : 0}
+                aria-disabled={!activeAddress || isWillcardLoading}
+                onClick={() => {
+                  if (activeAddress && !isWillcardLoading)
+                    void handleWillcardSubdomain(useSubdomain)
+                }}
+                onKeyDown={(e) => {
+                  if (
+                    (e.key === "Enter" || e.key === " ") &&
+                    activeAddress &&
+                    !isWillcardLoading
+                  ) {
+                    e.preventDefault()
+                    void handleWillcardSubdomain(useSubdomain)
+                  }
+                }}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "lg" }),
+                  "w-full justify-between gap-2",
+                  (!activeAddress || isWillcardLoading) &&
+                    "pointer-events-none opacity-50"
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  {isWillcardLoading ? (
+                    <Spinner className="size-4" />
+                  ) : (
+                    <AstroidIcon className="size-4" />
+                  )}
+                  New Address
+                </span>
+                <span
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                  className="pointer-events-auto"
+                >
+                  <Switch
+                    aria-label="Willcard Subdomain"
+                    checked={useSubdomain}
+                    onCheckedChange={(checked) => {
+                      setUseSubdomain(checked)
+                      void handleWillcardSubdomain(checked)
+                    }}
+                    size="default"
+                    title="Willcard"
+                    className="mt-1"
+                  />
+                </span>
+              </div>
+            </div>
+          </>
+        ) : (
+          <p className="py-2 text-center text-sm text-muted-foreground">
+            Select or generate an email address to start receiving messages.
+          </p>
+        )}
+      </div>
+      <Card className="bg-linear-to-b from-card/80 via-card/80 to-card/80 drop-shadow-sm backdrop-blur-lg">
+        <CardHeader className="border-b">
+          <div className="flex items-center gap-4">
+            <CardTitle className="shrink-0">Inbox</CardTitle>
+            <div className="flex flex-1 items-center justify-center">
+              <InputGroup className="h-8 w-full max-w-full rounded-md border bg-input/30 shadow-none! sm:max-w-sm dark:border-border/40">
+                <InputGroupAddon>
+                  <SearchIcon className="size-3.5 shrink-0 opacity-50" />
+                </InputGroupAddon>
+                <input
+                  ref={searchRef}
+                  type="text"
+                  placeholder="Search emails..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!activeAddress}
+                />
+                <InputGroupAddon align="inline-end">
+                  {searchQuery ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="flex items-center justify-center"
+                    >
+                      <XIcon className="size-3.5 shrink-0 opacity-50" />
+                    </button>
+                  ) : (
+                    <kbd className="flex items-center gap-0.5 rounded-md border bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+                      {isMac ? "⌘" : "Ctrl"}+K
+                    </kbd>
+                  )}
+                </InputGroupAddon>
+              </InputGroup>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Refresh inbox"
+              disabled={!activeAddress || isLoading}
+              onClick={() => void loadEmails()}
+            >
+              {isLoading ? <Spinner /> : <RefreshCwIcon />}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="min-h-0 flex-1 px-0">
+          {!activeAddress ? (
+            <Empty className="h-full min-h-60 rounded-none border-0">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <InboxIcon />
+                </EmptyMedia>
+                <EmptyTitle>No address</EmptyTitle>
+                <EmptyDescription>Generate an address first.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : isLoading ? (
+            <div className="flex h-full min-h-60 items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Spinner />
+              <span>Loading emails...</span>
+            </div>
+          ) : error ? (
+            <Empty className="h-full min-h-60 rounded-none border-0">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <InboxIcon />
+                </EmptyMedia>
+                <EmptyTitle>Inbox unavailable</EmptyTitle>
+                <EmptyDescription>{error}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : emails.length === 0 ? (
+            <Empty className="h-full min-h-60 rounded-none border-0">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <MailOpenIcon />
+                </EmptyMedia>
+                <EmptyTitle>No emails yet</EmptyTitle>
+                <EmptyDescription>
+                  Incoming messages will appear here.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : filteredEmails.length === 0 ? (
+            <Empty className="h-full min-h-60 rounded-none border-0">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <SearchIcon />
+                </EmptyMedia>
+                <EmptyTitle>No results</EmptyTitle>
+                <EmptyDescription>
+                  No emails match your search query.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : (
+            <ScrollArea className="h-full max-h-96 min-h-60 lg:max-h-150">
+              <div className="flex flex-col p-2">
+                {filteredEmails.map((email, index) => (
+                  <div key={email.id}>
+                    <EmailItemButton
+                      email={email}
+                      isExpanded={email.id === expandedEmailId}
+                      onToggle={() => void handleToggleEmail(email)}
+                    />
+                    <div
+                      className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+                      style={{
+                        gridTemplateRows:
+                          email.id === expandedEmailId ? "1fr" : "0fr",
+                      }}
+                    >
+                      <div className="overflow-hidden">
+                        <EmailDetailContent
+                          detail={emailDetails[email.id]}
+                          isLoading={loadingDetailId === email.id}
+                        />
+                      </div>
+                    </div>
+                    {index < emails.length - 1 && (
+                      <Separator className="my-1" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function getSenderInitial(email: EmailItem) {
+  const label = email.from.name ?? email.from.email
+  return label.slice(0, 1).toUpperCase()
+}
+
+function EmailItemButton({
+  email,
+  isExpanded,
+  onToggle,
+}: {
+  email: EmailItem
+  isExpanded: boolean
+  onToggle: () => void
+}) {
+  const senderName = email.from.name ?? email.from.email
+
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex w-full min-w-0 items-start gap-3 rounded-lg p-3 text-left hover:bg-muted",
+        isExpanded && "bg-muted"
+      )}
+      onClick={onToggle}
+    >
+      <Avatar>
+        <AvatarFallback>{getSenderInitial(email)}</AvatarFallback>
+      </Avatar>
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="flex min-w-0 items-center gap-2">
+          {!email.isRead && (
+            <span className="size-2 rounded-full bg-primary" aria-hidden />
+          )}
+          <span className="truncate text-sm font-medium">{senderName}</span>
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+            {formatRelativeInboxTime(email.receivedAt)}
+          </span>
+        </span>
+        <span
+          className={cn(
+            "max-w-[25ch] truncate text-sm",
+            !email.isRead && "font-semibold"
+          )}
+        >
+          {email.subject}
+        </span>
+        <span className="line-clamp-2 text-sm text-muted-foreground">
+          {email.snippet}
+        </span>
+      </span>
+    </button>
+  )
+}
+
+function formatFullDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "full",
+    timeStyle: "short",
+  }).format(new Date(value))
+}
+
+function EmailDetailContent({
+  detail,
+  isLoading,
+}: {
+  detail: EmailDetail | undefined
+  isLoading: boolean
+}) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+        <Spinner />
+        <span>Loading email...</span>
+      </div>
+    )
+  }
+
+  if (!detail) return null
+
+  const senderName = detail.from.name ?? detail.from.email
+
+  return (
+    <div className="border-t px-6 py-5">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-2xl font-semibold tracking-normal">
+          {detail.subject}
+        </h1>
+        <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+          <p>
+            From <span className="text-foreground">{senderName}</span> &lt;
+            {detail.from.email}&gt;
+          </p>
+          <p>{formatFullDate(detail.receivedAt)}</p>
+        </div>
+      </div>
+      <div className="mt-4">
+        <div className="airmail-stripe h-4 w-full rounded-t-lg" />
+        <div className="min-h-60 border-y bg-background">
+          {detail.bodyHtml ? (
+            <iframe
+              title={detail.subject}
+              srcDoc={`<style>html,body{background:transparent!important;margin:0}</style>${detail.bodyHtml}`}
+              sandbox="allow-same-origin"
+              className="h-96 w-full bg-background"
+            />
+          ) : (
+            <pre className="min-h-60 p-4 font-sans text-sm whitespace-pre-wrap">
+              {detail.bodyText}
+            </pre>
+          )}
+        </div>
+        <div className="airmail-stripe h-4 w-full rounded-b-lg" />
+      </div>
     </div>
   )
 }
