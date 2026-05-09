@@ -13,21 +13,13 @@ import {
 import { Domain } from "@/models/domain.model"
 
 const EMAIL_API = process.env.NEXT_PUBLIC_EMAIL_API_URL
+const DOMAIN_FETCH_TIMEOUT_MS = 3000
 
 // GET /api/domains — domain sistem dari BE email, custom domain dari MongoDB (butuh auth)
 export async function GET() {
   const auth = await getAuthUser()
 
-  const beRes = await fetch(`${EMAIL_API}/domains`)
-  const beData = (await beRes.json()) as { domains: Array<{ domain: string }> }
-
-  const systemDomains = beData.domains.map((d, i) => ({
-    id: `sys_${i}_${d.domain}`,
-    name: d.domain,
-    type: "system" as const,
-    isVerified: true,
-    addedAt: new Date(0).toISOString(),
-  }))
+  const systemDomains = await getSystemDomains()
 
   if (!auth) return NextResponse.json(systemDomains)
 
@@ -44,6 +36,58 @@ export async function GET() {
       addedAt: d.createdAt,
     })),
   ])
+}
+
+async function getSystemDomains(): Promise<
+  Array<{
+    id: string
+    name: string
+    type: "system"
+    isVerified: boolean
+    addedAt: string
+  }>
+> {
+  if (!EMAIL_API) {
+    console.error("NEXT_PUBLIC_EMAIL_API_URL is not configured")
+    return []
+  }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), DOMAIN_FETCH_TIMEOUT_MS)
+
+  try {
+    const beRes = await fetch(`${EMAIL_API}/domains`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+
+    if (!beRes.ok) {
+      console.error(`Email API returned status: ${beRes.status}`)
+      return []
+    }
+
+    const beData = (await beRes.json()) as {
+      domains: Array<{ domain: string }>
+    }
+
+    if (!beData.domains || !Array.isArray(beData.domains)) {
+      console.error("Invalid response format from email API")
+      return []
+    }
+
+    return beData.domains.map((d, i) => ({
+      id: `sys_${i}_${d.domain}`,
+      name: d.domain,
+      type: "system" as const,
+      isVerified: true,
+      addedAt: new Date(0).toISOString(),
+    }))
+  } catch (error) {
+    console.error("Failed to fetch system domains:", error)
+    return []
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 // POST /api/domains — tambah domain custom (butuh auth)

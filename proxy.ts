@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { verifyToken } from "@/lib/jwt"
 
 // Halaman yang hanya bisa diakses kalau SUDAH login
-const AUTH_ONLY_PATHS = ["/account"]
+const AUTH_ONLY_PATHS = ["/account", "/inbox"]
 // Halaman yang hanya bisa diakses kalau BELUM login
 const GUEST_ONLY_PATHS = ["/signin", "/signup", "/login"]
 
