@@ -17,33 +17,35 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-update-deploy-script"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-fix-deploy-containerfile"
 
 git checkout -b "$BRANCH_NAME"
 
 git add -A
 
-COMMIT_MSG="feat: update script deploy
+COMMIT_MSG="feat: fix deploy script dan containerfile
 
 Perubahan utama:
-- app/api/admin/* + components/admin/admin-session-dialog.tsx: tambah admin console untuk overview, accounts, domains, addresses, vouchers, dan limits
-- app/api/vouchers/redeem/route.ts + services/domain.service.ts: redeem voucher untuk buka private access domain milik user
-- app/api/domains/route.ts + app/api/domains/[domainId]/route.ts + lib/domain-access.ts: ownership domain, visibility toggle, dan private access window
-- components/sidebar/domain-section.tsx: domain milik akun di /inbox bisa buka dialog voucher dan toggle public/private selama voucher masih aktif
-- components/address-sidebar.tsx + components/auth-loader.tsx: refresh domain/address state supaya sidebar inbox pakai data user yang benar
-- components/ui/select.tsx + components/ui/table.tsx + components/ui/tabs.tsx: tambah komponen UI yang dipakai admin panel
-- lib/admin-session.ts + lib/admin-settings.ts + lib/rate-limit.ts + lib/system-domains.ts: util admin/session/settings/rate limit/system domains
-- models/admin-settings.model.ts + models/rate-limit.model.ts + models/voucher.model.ts: model baru untuk admin settings, rate limit, dan voucher
-- types/index.ts + models/domain.model.ts: metadata domain untuk visibility/privateUntil/ownership
-- app/api/auth/* + app/api/addresses/route.ts + app/api/app-settings/route.ts: penyesuaian auth dan API pendukung flow admin/inbox
+- deploy.sh: fix PIPESTATUS dengan temp file supaya build failure terdeteksi benar dari subshell pipe
+- deploy.sh: filter build log noise (pnpm Progress/WARN/Done) jadi spinner, error tetap tampil
+- deploy.sh: tambah per-phase timer (build, health check, swap, final check, cleanup) dan summary report di akhir
+- deploy.sh: tambah final health check dengan fail() supaya tidak silent jika container tidak naik
+- deploy.sh: cleanup diurutkan ulang — buildah working containers dihapus duluan sebelum image, supaya rmi tidak gagal karena image masih dipakai
+- deploy.sh: base image (alpine:edge) tidak dihapus lagi supaya layer cache persist antar deploy
+- deploy.sh: auto-detect Containerfile atau Dockerfile dengan fallback
+- deploy.sh: tambah --restart=unless-stopped di container final
+- Containerfile: tambah --mount=type=cache,id=pnpm-store untuk persist pnpm store antar build (dari 30+ menit → ~9 menit)
+- Containerfile: tambah COPY pnpm-lock.yaml dan --frozen-lockfile supaya tidak resolve ulang tiap build
+- Containerfile: hapus stage build-deps yang redundant, builder langsung install sendiri
+- Containerfile: gabung npm install -g npm@latest pnpm jadi satu layer
 
 Testing:
-- [ ] Admin session bisa login dan buka semua tab
-- [ ] Domain milik user di /inbox tampil dengan badge dan dialog voucher
-- [ ] Redeem voucher mengubah domain ke private
-- [ ] Selama privateUntil aktif, switch public/private bekerja dari dialog domain
-- [ ] Ownership domain inbox.zamkara.uk terbaca benar untuk akun zamkara@gnuweeb.org
-- [ ] Addresses tab admin lebih mudah discan dan edit address lewat dialog
+- [ ] Build pertama selesai dan image tmail:latest muncul
+- [ ] Build kedua lebih cepat karena pnpm store di-cache
+- [ ] Summary report muncul di akhir dengan durasi tiap phase
+- [ ] Setelah deploy, podman images hanya tmail:latest dan alpine:edge
+- [ ] Tidak ada buildah working-container nyangkut di podman ps -a --external
+- [ ] Container tmail running di port 8901
 "
 
 git commit -m "$COMMIT_MSG"

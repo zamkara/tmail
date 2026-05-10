@@ -1,37 +1,33 @@
+# syntax=docker/dockerfile:1
 FROM alpine:edge AS base
 
 RUN apk add --no-cache nodejs npm
+RUN npm install -g npm@latest pnpm
 
-RUN npm install -g npm@latest
-
-RUN npm install -g pnpm
-
+# ---- prod deps ---------------------------------------------------------------
 FROM base AS prod-deps
 WORKDIR /app
-COPY package.json ./
+COPY package.json pnpm-lock.yaml ./
 ENV CI=true
-RUN pnpm install --prod --ignore-scripts
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm install --prod --frozen-lockfile --ignore-scripts
 
-FROM base AS build-deps
+# ---- builder -----------------------------------------------------------------
+FROM base AS builder
 WORKDIR /app
-COPY package.json ./
+COPY package.json pnpm-lock.yaml ./
 ENV CI=true
-RUN pnpm install --ignore-scripts
-
-FROM build-deps AS builder
-WORKDIR /app
-ENV CI=true
-COPY --from=build-deps /app/node_modules ./node_modules
-COPY --from=build-deps /app/pnpm-lock.yaml ./
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --ignore-scripts
 COPY . .
 RUN pnpm build
 
+# ---- runner ------------------------------------------------------------------
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8901
 COPY --from=prod-deps /app/node_modules ./node_modules
-COPY --from=builder /app/pnpm-lock.yaml ./
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY package.json ./
