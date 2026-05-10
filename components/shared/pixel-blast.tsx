@@ -397,7 +397,7 @@ const PixelBlast = ({
       renderer.domElement.style.width = '100%'
       renderer.domElement.style.height = '100%'
       renderer.domElement.style.display = 'block'
-      renderer.domElement.style.pointerEvents = 'auto'
+      renderer.domElement.style.pointerEvents = 'inherit'
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
       container.appendChild(renderer.domElement)
       if (transparent) renderer.setClearAlpha(0)
@@ -435,7 +435,8 @@ const PixelBlast = ({
       const quadGeom = new THREE.PlaneGeometry(2, 2)
       const quad = new THREE.Mesh(quadGeom, material)
       scene.add(quad)
-      const clock = new THREE.Clock()
+      const timer = new THREE.Timer()
+      timer.connect(document)
       const setSize = () => {
         const w = window.innerWidth || 1
         const h = window.innerHeight || 1
@@ -527,12 +528,13 @@ const PixelBlast = ({
         passive: true
       })
       let raf = 0
-      const animate = () => {
+      const animate = timestamp => {
         if (autoPauseOffscreen && !visibilityRef.current.visible) {
           raf = requestAnimationFrame(animate)
           return
         }
-        uniforms.uTime.value = timeOffset + clock.getElapsedTime() * speedRef.current
+        timer.update(timestamp)
+        uniforms.uTime.value = timeOffset + timer.getElapsed() * speedRef.current
         if (liquidEffect) liquidEffect.uniforms.get('uTime').value = uniforms.uTime.value
         if (composer) {
           if (touch) touch.update()
@@ -554,7 +556,7 @@ const PixelBlast = ({
         scene,
         camera,
         material,
-        clock,
+        timer,
         clickIx: 0,
         uniforms,
         resizeObserver: ro,
@@ -597,6 +599,7 @@ const PixelBlast = ({
       cancelAnimationFrame(t.raf)
       t.quad?.geometry.dispose()
       t.material.dispose()
+      t.timer?.dispose()
       t.composer?.dispose()
       t.renderer.dispose()
       t.renderer.forceContextLoss()

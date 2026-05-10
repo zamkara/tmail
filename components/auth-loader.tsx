@@ -11,6 +11,7 @@ export function AuthLoader() {
   const setAuthLoaded = useAuthStore((s) => s.setLoaded)
   const setAddresses = useAddressStore((s) => s.setAddresses)
   const setAddressLoaded = useAddressStore((s) => s.setLoaded)
+  const setActiveAddress = useAddressStore((s) => s.setActiveAddress)
 
   useEffect(() => {
     let cancelled = false
@@ -21,7 +22,18 @@ export function AuthLoader() {
 
         if (user) {
           const addresses = await getAddresses()
-          if (!cancelled) setAddresses(addresses)
+          if (!cancelled) {
+            setAddresses(addresses)
+
+            const activeAddressId = useAddressStore.getState().activeAddressId
+            const hasActiveAddress = addresses.some(
+              (address) => address.id === activeAddressId
+            )
+
+            if (!hasActiveAddress) {
+              setActiveAddress(addresses[0]?.id ?? null)
+            }
+          }
         } else {
           if (!cancelled) setAddressLoaded()
         }
@@ -38,7 +50,7 @@ export function AuthLoader() {
     return () => {
       cancelled = true
     }
-  }, [setUser, setAuthLoaded, setAddresses, setAddressLoaded])
+  }, [setUser, setAuthLoaded, setAddresses, setAddressLoaded, setActiveAddress])
 
   return null
 }

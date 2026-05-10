@@ -1,6 +1,7 @@
 import { Geist_Mono, Inter } from "next/font/google"
 
 import "./globals.css"
+import AdminSessionDialog from "@/components/admin/admin-session-dialog"
 import { AuthLoader } from "@/components/auth-loader"
 import { InboxStateSync } from "@/components/inbox-state-sync"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -24,13 +25,21 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", inter.variable)}
+      className={cn(
+        "antialiased",
+        fontMono.variable,
+        "font-sans",
+        inter.variable
+      )}
     >
       <body>
         <ThemeProvider>
           <AuthLoader />
           <InboxStateSync />
-          <TooltipProvider>{children}</TooltipProvider>
+          <TooltipProvider>
+            {children}
+            <AdminSessionDialog />
+          </TooltipProvider>
           <Toaster />
         </ThemeProvider>
       </body>

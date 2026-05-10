@@ -6,6 +6,10 @@ export interface Domain {
   type: DomainType
   addedAt: string
   isVerified: boolean
+  visibility?: "public" | "private"
+  privateUntil?: string | null
+  isBanned?: boolean
+  isOwnedByUser?: boolean
 }
 
 export interface GeneratedAddress {

@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Spinner } from "@/components/ui/spinner"
+import EmailOtpChip from "@/components/inbox/email-otp-chip"
 import { formatRelativeInboxTime } from "@/lib/inbox"
 import { cn } from "@/lib/utils"
 import type { EmailItem, GeneratedAddress } from "@/types"
@@ -123,13 +124,20 @@ function EmailListButton({
   const senderName = email.from.name ?? email.from.email
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       className={cn(
         "flex w-full min-w-0 items-start gap-3 rounded-lg p-3 text-left hover:bg-muted",
         isSelected && "bg-muted"
       )}
       onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault()
+          onSelect()
+        }
+      }}
     >
       <Avatar>
         <AvatarFallback>{getSenderInitial(email)}</AvatarFallback>
@@ -140,9 +148,6 @@ function EmailListButton({
             <span className="size-2 rounded-full bg-primary" aria-hidden />
           )}
           <span className="truncate text-sm font-medium">{senderName}</span>
-          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-            {formatRelativeInboxTime(email.receivedAt)}
-          </span>
         </span>
         <span
           className={cn(
@@ -156,7 +161,17 @@ function EmailListButton({
           {email.snippet}
         </span>
       </span>
-    </button>
+      <span className="flex w-24 shrink-0 flex-col items-end gap-1">
+        <span className="text-xs text-muted-foreground">
+          {formatRelativeInboxTime(email.receivedAt)}
+        </span>
+        <EmailOtpChip
+          subject={email.subject}
+          snippet={email.snippet}
+          className="max-w-full"
+        />
+      </span>
+    </div>
   )
 }
 
