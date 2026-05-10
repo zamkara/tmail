@@ -15,6 +15,17 @@ function hash(value: string) {
   return createHash("sha256").update(value).digest()
 }
 
+function isSecureRequest(req: Request) {
+  const forwardedProto = req.headers.get("x-forwarded-proto")
+  if (forwardedProto) {
+    return forwardedProto
+      .split(",")
+      .some((value) => value.trim().toLowerCase() === "https")
+  }
+
+  return new URL(req.url).protocol === "https:"
+}
+
 function isValidPassword(value: unknown) {
   const configuredPassword = process.env.ADMIN_AUTH
   if (!configuredPassword || typeof value !== "string") return false
@@ -49,11 +60,12 @@ export async function POST(req: Request) {
 
   const token = await signAdminSession()
   const response = NextResponse.json({ authenticated: true })
+  const secure = isSecureRequest(req)
 
   response.cookies.set(ADMIN_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure,
     path: "/",
     maxAge: getAdminSessionMaxAge(),
   })
@@ -61,13 +73,14 @@ export async function POST(req: Request) {
   return response
 }
 
-export async function DELETE() {
+export async function DELETE(req: Request) {
   const response = NextResponse.json({ authenticated: false })
+  const secure = isSecureRequest(req)
 
   response.cookies.set(ADMIN_COOKIE, "", {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure,
     path: "/",
     maxAge: 0,
   })

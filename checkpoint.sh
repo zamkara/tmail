@@ -17,35 +17,27 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-fix-deploy-containerfile"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-fix-admin-cookie-mobile-bg"
 
 git checkout -b "$BRANCH_NAME"
 
 git add -A
 
-COMMIT_MSG="feat: fix deploy script dan containerfile
+COMMIT_MSG="feat: fix admin session cookie dan disable background animation di mobile
 
 Perubahan utama:
-- deploy.sh: fix PIPESTATUS dengan temp file supaya build failure terdeteksi benar dari subshell pipe
-- deploy.sh: filter build log noise (pnpm Progress/WARN/Done) jadi spinner, error tetap tampil
-- deploy.sh: tambah per-phase timer (build, health check, swap, final check, cleanup) dan summary report di akhir
-- deploy.sh: tambah final health check dengan fail() supaya tidak silent jika container tidak naik
-- deploy.sh: cleanup diurutkan ulang — buildah working containers dihapus duluan sebelum image, supaya rmi tidak gagal karena image masih dipakai
-- deploy.sh: base image (alpine:edge) tidak dihapus lagi supaya layer cache persist antar deploy
-- deploy.sh: auto-detect Containerfile atau Dockerfile dengan fallback
-- deploy.sh: tambah --restart=unless-stopped di container final
-- Containerfile: tambah --mount=type=cache,id=pnpm-store untuk persist pnpm store antar build (dari 30+ menit → ~9 menit)
-- Containerfile: tambah COPY pnpm-lock.yaml dan --frozen-lockfile supaya tidak resolve ulang tiap build
-- Containerfile: hapus stage build-deps yang redundant, builder langsung install sendiri
-- Containerfile: gabung npm install -g npm@latest pnpm jadi satu layer
+- app/api/admin/session/route.ts: cookie admin sekarang hanya `Secure` saat request benar-benar HTTPS, termasuk support `x-forwarded-proto` dari reverse proxy
+- app/api/admin/session/route.ts: login admin via HTTP direct IP:port tidak lagi gagal simpan session cookie di browser
+- components/shared/desktop-only.tsx: tambah wrapper client-only untuk mencegah background animation mount di mobile
+- app/page.tsx: disable `ShootingStars` dan `Aurora` di mobile
+- app/signin/page.tsx: disable `PixelBlast` di mobile supaya beban GPU/CPU turun
 
 Testing:
-- [ ] Build pertama selesai dan image tmail:latest muncul
-- [ ] Build kedua lebih cepat karena pnpm store di-cache
-- [ ] Summary report muncul di akhir dengan durasi tiap phase
-- [ ] Setelah deploy, podman images hanya tmail:latest dan alpine:edge
-- [ ] Tidak ada buildah working-container nyangkut di podman ps -a --external
-- [ ] Container tmail running di port 8901
+- [ ] Login admin di HTTP `:8901` berhasil dan `/api/admin/overview` tidak lagi `401 Unauthorized`
+- [ ] Login admin di HTTPS atau reverse proxy HTTPS tetap menyimpan cookie `Secure`
+- [ ] Home page di mobile tidak lagi mount background animation
+- [ ] Sign-in page di mobile tidak lagi mount `PixelBlast`
+- [ ] Desktop tetap menampilkan background animation seperti sebelumnya
 "
 
 git commit -m "$COMMIT_MSG"
