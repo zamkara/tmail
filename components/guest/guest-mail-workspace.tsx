@@ -14,6 +14,7 @@ import { toast } from "sonner"
 import CopyButton from "@/components/shared/copy-button"
 import DecryptedText from "@/components/shared/decrypted-text"
 import DomainAddressSwitcher from "@/components/guest/domain-address-switcher"
+import EmailOtpChip from "@/components/inbox/email-otp-chip"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -32,7 +33,10 @@ import { Separator } from "@/components/ui/separator"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { formatRelativeInboxTime, parseInboxSender } from "@/lib/inbox"
+import { generateAddress } from "@/services/address.service"
+import { getDomains } from "@/services/domain.service"
 import { useAddressStore } from "@/stores/address.store"
+import { useAuthStore } from "@/stores/auth.store"
 import { useAuroraStore } from "@/stores/aurora.store"
 import { useDomainStore } from "@/stores/domain.store"
 import { useInboxStore } from "@/stores/inbox.store"
@@ -49,6 +53,12 @@ interface BeInboxItem {
   created_at?: number
   text?: string
   html?: string | false
+}
+
+interface PublicAppSettings {
+  allowGuestAddresses: boolean
+  allowWildcardSubdomains: boolean
+  inboxRefreshSeconds: number
 }
 
 function isAddressAvailable(address: GeneratedAddress) {
@@ -101,6 +111,34 @@ function mapEmailDetail(
   }
 }
 
+function createGuestAddress(
+  domain: { id: string; name: string },
+  wildcard: boolean
+) {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+  const randomLocal = Array.from(
+    { length: 6 },
+    () => chars[Math.floor(Math.random() * chars.length)]
+  ).join("")
+  const randomSub = Array.from(
+    { length: 5 },
+    () => chars[Math.floor(Math.random() * chars.length)]
+  ).join("")
+  const now = new Date()
+
+  return {
+    id: `local_${Date.now()}`,
+    address: wildcard
+      ? `${randomLocal}@${randomSub}.${domain.name}`
+      : `${randomLocal}@${domain.name}`,
+    domainId: domain.id,
+    domainName: domain.name,
+    username: null,
+    createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+  }
+}
+
 async function fetchJsonWithTimeout<T>(url: string): Promise<T> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), INBOX_FETCH_TIMEOUT_MS)
@@ -134,9 +172,13 @@ export default function GuestMailWorkspace() {
   const markRead = useInboxStore((state) => state.markRead)
   const resetInbox = useInboxStore((state) => state.resetInbox)
   const domains = useDomainStore((state) => state.domains)
+  const domainsLoaded = useDomainStore((state) => state.isLoaded)
+  const setDomains = useDomainStore((state) => state.setDomains)
   const addAddress = useAddressStore((state) => state.addAddress)
   const updateAddress = useAddressStore((state) => state.updateAddress)
   const setActiveAddress = useAddressStore((state) => state.setActiveAddress)
+  const user = useAuthStore((state) => state.user)
+  const authLoaded = useAuthStore((state) => state.isLoaded)
 
   const [emails, setEmails] = useState<EmailItem[]>([])
   const [expandedEmailId, setExpandedEmailId] = useState<string | null>(null)
@@ -145,13 +187,78 @@ export default function GuestMailWorkspace() {
   )
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingDomains, setIsLoadingDomains] = useState(false)
+  const [appSettings, setAppSettings] = useState<PublicAppSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
   const prevEmailCountRef = useRef(0)
+  const autoAddressPromiseRef = useRef<Promise<GeneratedAddress> | null>(null)
+  const domainLoadStartedRef = useRef(false)
   const triggerAurora = useAuroraStore((state) => state.trigger)
 
   useEffect(() => {
     removeExpired()
   }, [removeExpired])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadSettings() {
+      try {
+        const data =
+          await fetchJsonWithTimeout<PublicAppSettings>("/api/app-settings")
+        if (!cancelled) setAppSettings(data)
+      } catch {
+        if (!cancelled) {
+          setAppSettings({
+            allowGuestAddresses: true,
+            allowWildcardSubdomains: true,
+            inboxRefreshSeconds: INBOX_REFRESH_MS / 1000,
+          })
+        }
+      }
+    }
+
+    void loadSettings()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (domains.length > 0 || domainLoadStartedRef.current) return
+
+    let cancelled = false
+    domainLoadStartedRef.current = true
+
+    async function loadDomains() {
+      setIsLoadingDomains(true)
+
+      try {
+        const nextDomains = await getDomains()
+        if (!cancelled) {
+          setDomains(nextDomains.filter((domain) => domain.type === "system"))
+        }
+      } catch (error) {
+        console.error("Failed to load domains:", error)
+        if (!cancelled) {
+          setDomains([])
+          toast.error(
+            error instanceof Error ? error.message : "Failed to load domains"
+          )
+        }
+      } finally {
+        if (!cancelled) setIsLoadingDomains(false)
+        if (cancelled) domainLoadStartedRef.current = false
+      }
+    }
+
+    void loadDomains()
+
+    return () => {
+      cancelled = true
+    }
+  }, [domains.length, domainsLoaded, setDomains])
 
   const activeAddress = useMemo(
     () =>
@@ -161,6 +268,57 @@ export default function GuestMailWorkspace() {
       ) ?? null,
     [activeAddressId, addresses]
   )
+
+  useEffect(() => {
+    if (!authLoaded) return
+    if (!user && appSettings?.allowGuestAddresses === false) return
+    if (activeAddress) return
+
+    const reusableAddress = addresses.find(isAddressAvailable)
+    if (reusableAddress) {
+      setActiveAddress(reusableAddress.id)
+      return
+    }
+
+    const firstSystemDomain = [...domains]
+      .filter((domain) => domain.type === "system")
+      .sort((first, second) => first.name.localeCompare(second.name))[0]
+
+    if (!firstSystemDomain || autoAddressPromiseRef.current) return
+
+    autoAddressPromiseRef.current = user
+      ? generateAddress(firstSystemDomain.id, firstSystemDomain.name, true)
+      : Promise.resolve(
+          createGuestAddress(
+            firstSystemDomain,
+            appSettings?.allowWildcardSubdomains ?? true
+          )
+        )
+
+    void autoAddressPromiseRef.current
+      .then((address) => {
+        resetInbox()
+        addAddress(address)
+        setActiveAddress(address.id)
+      })
+      .catch((error) => {
+        console.error("Failed to create initial email address:", error)
+        toast.error("Failed to create email address")
+      })
+      .finally(() => {
+        autoAddressPromiseRef.current = null
+      })
+  }, [
+    activeAddress,
+    addAddress,
+    addresses,
+    domains,
+    authLoaded,
+    appSettings,
+    resetInbox,
+    setActiveAddress,
+    user,
+  ])
 
   const loadEmails = useCallback(async () => {
     if (!activeAddress) {
@@ -252,7 +410,10 @@ export default function GuestMailWorkspace() {
 
   async function handleWillcardSubdomain(withSubdomain?: boolean) {
     setIsWillcardLoading(true)
-    const shouldUseSubdomain = withSubdomain ?? useSubdomain
+    const shouldUseSubdomain =
+      appSettings?.allowWildcardSubdomains === false
+        ? false
+        : (withSubdomain ?? useSubdomain)
     try {
       const guestDomains = domains.filter((d) => d.type === "system")
       if (guestDomains.length === 0) {
@@ -366,7 +527,7 @@ export default function GuestMailWorkspace() {
     setEditAddress(null)
   }
 
-  const [useSubdomain, setUseSubdomain] = useState(false)
+  const [useSubdomain, setUseSubdomain] = useState(true)
 
   const [isWillcardLoading, setIsWillcardLoading] = useState(false)
 
@@ -646,13 +807,20 @@ function EmailItemButton({
   const senderName = email.from.name ?? email.from.email
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       className={cn(
         "flex w-full min-w-0 items-start gap-3 rounded-lg p-3 text-left hover:bg-muted",
         isExpanded && "bg-muted"
       )}
       onClick={onToggle}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault()
+          onToggle()
+        }
+      }}
     >
       <Avatar>
         <AvatarFallback>{getSenderInitial(email)}</AvatarFallback>
@@ -663,9 +831,6 @@ function EmailItemButton({
             <span className="size-2 rounded-full bg-primary" aria-hidden />
           )}
           <span className="truncate text-sm font-medium">{senderName}</span>
-          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-            {formatRelativeInboxTime(email.receivedAt)}
-          </span>
         </span>
         <span
           className={cn(
@@ -679,7 +844,17 @@ function EmailItemButton({
           {email.snippet}
         </span>
       </span>
-    </button>
+      <span className="flex w-24 shrink-0 flex-col items-end gap-1">
+        <span className="text-xs text-muted-foreground">
+          {formatRelativeInboxTime(email.receivedAt)}
+        </span>
+        <EmailOtpChip
+          subject={email.subject}
+          snippet={email.snippet}
+          className="max-w-full"
+        />
+      </span>
+    </div>
   )
 }
 

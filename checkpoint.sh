@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# TMAIL.SH - Auto branch, stage, dan commit
+# CHECKPOINT.SH - Auto branch, stage, dan commit
 # ============================================================================
 # Cara update script ini (untuk AI):
 # 1. Jalankan `git diff` dan `git diff --cached` untuk melihat semua perubahan
@@ -12,45 +12,38 @@
 #    - Baris pertama: ringkasan fitur utama + fix
 #    - Paragraf kedua: detail poin-poin perubahan (bullet)
 #    - Checkbox list untuk testing
-# 6. Simpan file, user tinggal jalankan ./tmail.sh
+# 6. Simpan file, user tinggal jalankan ./checkpoint.sh
 # ============================================================================
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-pixelblast-decryptedtext-navbar-logo"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-admin-voucher-domain-controls"
 
 git checkout -b "$BRANCH_NAME"
 
 git add -A
 
-COMMIT_MSG="feat: PixelBlast background, DecryptedText animation, navbar logo, inbox refactor
+COMMIT_MSG="feat: admin console overhaul and voucher-based domain controls
 
 Perubahan utama:
-- components/shared/pixel-blast.tsx + .css: WebGL pixel shader background (React Bits)
-- components/shared/decrypted-text.tsx: Decrypt animation component (React Bits)
-- components/guest/guest-navbar.tsx: Inline SVG logo (ic_tmail) di kiri, justify-between layout
-- public/ic_tmail.svg: fill #000000 jadi currentColor biar ngikut theme
-- app/page.tsx: PikselBlast ganti Particles, main flex-col + center
-- app/signin/page.tsx: PikselBlast background, bg-background
-- components/guest/guest-mail-workspace.tsx: Refactor inbox (expand/collapse, Card layout, search, decrypted address text, willcard switch)
-- components/guest/domain-address-switcher.tsx: Dialog redesain (search bar, Login/Add Domain button, hideGenerate prop)
-- components/guest/guest-mail-list-card.tsx: Gradient bg + hover effect
-- components/guest/guest-mail-preview-card.tsx: backdrop-blur
-- components/mobile-sidebar-drawers.tsx: Restructure, add login check + fetch per address
-- components/shared/copy-button.tsx: Styling adjustment
-- components/theme-provider.tsx: Guard event.key undefined di hotkey
-- components/ui/sidebar.tsx: Fix Tailwind v4 calc() warnings (left-[calc...] -> -left-(--...))
-- stores/address.store.ts: Add addAddress, updateAddress, removeExpired, setActiveAddress
-- package.json: Add motion, three, postprocessing, @types/three dependencies
+- app/api/admin/* + components/admin/admin-session-dialog.tsx: tambah admin console untuk overview, accounts, domains, addresses, vouchers, dan limits
+- app/api/vouchers/redeem/route.ts + services/domain.service.ts: redeem voucher untuk buka private access domain milik user
+- app/api/domains/route.ts + app/api/domains/[domainId]/route.ts + lib/domain-access.ts: ownership domain, visibility toggle, dan private access window
+- components/sidebar/domain-section.tsx: domain milik akun di /inbox bisa buka dialog voucher dan toggle public/private selama voucher masih aktif
+- components/address-sidebar.tsx + components/auth-loader.tsx: refresh domain/address state supaya sidebar inbox pakai data user yang benar
+- components/ui/select.tsx + components/ui/table.tsx + components/ui/tabs.tsx: tambah komponen UI yang dipakai admin panel
+- lib/admin-session.ts + lib/admin-settings.ts + lib/rate-limit.ts + lib/system-domains.ts: util admin/session/settings/rate limit/system domains
+- models/admin-settings.model.ts + models/rate-limit.model.ts + models/voucher.model.ts: model baru untuk admin settings, rate limit, dan voucher
+- types/index.ts + models/domain.model.ts: metadata domain untuk visibility/privateUntil/ownership
+- app/api/auth/* + app/api/addresses/route.ts + app/api/app-settings/route.ts: penyesuaian auth dan API pendukung flow admin/inbox
 
 Testing:
-- [ ] Guest page tampil dengan PixelBlast background
-- [ ] DecryptedText animasi saat ganti address
-- [ ] Navbar logo muncul di kiri, theme toggle di kanan
-- [ ] Domain dialog login/add domain button animation
-- [ ] Inbox expand/collapse works
-- [ ] Signin page has PixelBlast background
-- [ ] Theme hotkey tidak error di signin page
+- [ ] Admin session bisa login dan buka semua tab
+- [ ] Domain milik user di /inbox tampil dengan badge dan dialog voucher
+- [ ] Redeem voucher mengubah domain ke private
+- [ ] Selama privateUntil aktif, switch public/private bekerja dari dialog domain
+- [ ] Ownership domain inbox.zamkara.uk terbaca benar untuk akun zamkara@gnuweeb.org
+- [ ] Addresses tab admin lebih mudah discan dan edit address lewat dialog
 "
 
 git commit -m "$COMMIT_MSG"

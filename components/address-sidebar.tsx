@@ -129,10 +129,12 @@ export function AddressSidebar() {
                         !open && "hidden"
                       )}
                     >
-                    <span className="truncate font-medium">Email Addresses</span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      Generate and switch addresses
-                    </span>
+                      <span className="truncate font-medium">
+                        Email Addresses
+                      </span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        Generate and switch addresses
+                      </span>
                     </div>
                   </div>
                 </SidebarMenuButton>
@@ -163,29 +165,35 @@ export function AddressSidebar() {
 function CollapsedAddressRail() {
   const pathname = usePathname()
   const domains = useDomainStore((state) => state.domains)
-  const domainsLoaded = useDomainStore((state) => state.isLoaded)
   const setDomains = useDomainStore((state) => state.setDomains)
   const addresses = useAddressStore((state) => state.addresses)
   const addressesLoaded = useAddressStore((state) => state.isLoaded)
   const setAddresses = useAddressStore((state) => state.setAddresses)
   const setActiveAddress = useAddressStore((state) => state.setActiveAddress)
   const activeAddressId = useAddressStore((state) => state.activeAddressId)
+  const user = useAuthStore((s) => s.user)
 
   React.useEffect(() => {
-    if (domainsLoaded) {
-      return
-    }
-
+    let cancelled = false
     async function loadDomains() {
       try {
-        setDomains(await getDomains())
+        const nextDomains = await getDomains()
+        if (!cancelled) {
+          setDomains(nextDomains)
+        }
       } catch {
-        toast.error("Failed to load domains")
+        if (!cancelled) {
+          toast.error("Failed to load domains")
+        }
       }
     }
 
     void loadDomains()
-  }, [domainsLoaded, setDomains])
+
+    return () => {
+      cancelled = true
+    }
+  }, [setDomains, user?.id])
 
   React.useEffect(() => {
     if (addressesLoaded) {

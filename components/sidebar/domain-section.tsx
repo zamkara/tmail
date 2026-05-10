@@ -1,18 +1,14 @@
 "use client"
 
-import { type FormEvent, type ReactNode, useEffect, useState } from "react"
-import {
-  Building2Icon,
-  GlobeIcon,
-  RefreshCwIcon,
-  Trash2Icon,
-} from "lucide-react"
+import { type ReactNode, useEffect, useState } from "react"
+import { Building2Icon, GlobeIcon, RefreshCwIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
 import DomainBadge from "@/components/shared/domain-badge"
 import AddDomainDialog from "@/components/sidebar/add-domain-dialog"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -41,17 +37,17 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { Spinner } from "@/components/ui/spinner"
+import { Switch } from "@/components/ui/switch"
 import { generateAddress } from "@/services/address.service"
 import {
-  deleteDomain,
   getDomains,
-  updateDomain as updateDomainRequest,
+  redeemDomainVoucher,
+  setDomainVisibility,
 } from "@/services/domain.service"
 import { useAddressStore } from "@/stores/address.store"
 import { useDomainStore } from "@/stores/domain.store"
 import { useAuthStore } from "@/stores/auth.store"
 import { useInboxStore } from "@/stores/inbox.store"
-import { isValidDomain } from "@/lib/domain-validation"
 import { buildInboxHref } from "@/lib/inbox"
 import { cn } from "@/lib/utils"
 import type { Domain } from "@/types"
@@ -70,9 +66,27 @@ function getDomainInitials(name: string) {
     .toUpperCase()
 }
 
+function formatPrivateUntil(value?: string | null) {
+  if (!value) return null
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date)
+}
+
+function hasPrivateAccessWindow(domain: Domain) {
+  if (!domain.privateUntil) return false
+
+  const time = new Date(domain.privateUntil).getTime()
+  return !Number.isNaN(time) && time > Date.now()
+}
+
 export default function DomainSection({ compact = false }: DomainSectionProps) {
   const domains = useDomainStore((state) => state.domains)
-  const isLoaded = useDomainStore((state) => state.isLoaded)
   const setDomains = useDomainStore((state) => state.setDomains)
   const updateDomain = useDomainStore((state) => state.updateDomain)
   const removeDomain = useDomainStore((state) => state.removeDomain)
@@ -84,21 +98,26 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
   const resetInbox = useInboxStore((s) => s.resetInbox)
 
   useEffect(() => {
-    if (isLoaded) {
-      return
-    }
-
+    let cancelled = false
     async function loadDomains() {
       try {
         const nextDomains = await getDomains()
-        setDomains(nextDomains)
+        if (!cancelled) {
+          setDomains(nextDomains)
+        }
       } catch {
-        toast.error("Failed to load domains")
+        if (!cancelled) {
+          toast.error("Failed to load domains")
+        }
       }
     }
 
     void loadDomains()
-  }, [isLoaded, setDomains])
+
+    return () => {
+      cancelled = true
+    }
+  }, [setDomains, user?.id])
 
   const sortedDomains = [...domains].sort((first, second) => {
     if (first.type !== second.type) {
@@ -133,14 +152,20 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
           {sortedDomains.map((domain) => {
             const Icon = domain.type === "system" ? GlobeIcon : Building2Icon
             const isLoading = loadingDomainId === domain.id
+            const canManageDomain = Boolean(
+              domain.isOwnedByUser ?? domain.type === "custom"
+            )
             const row = (
               <SidebarMenuButton
                 type="button"
+                size={compact ? "lg" : "default"}
                 className={cn(
-                  compact && "h-9",
-                  domain.type === "system" && "cursor-default"
+                  compact && "h-auto py-2",
+                  !canManageDomain &&
+                    domain.type === "system" &&
+                    "cursor-default"
                 )}
-                aria-disabled={domain.type === "system"}
+                aria-disabled={!canManageDomain && domain.type === "system"}
               >
                 <div className="flex min-w-0 flex-1 items-center gap-2">
                   {compact ? (
@@ -152,20 +177,24 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
                   ) : (
                     <Icon />
                   )}
-                  <span className="min-w-0 flex-1 truncate">{domain.name}</span>
-                  {!compact && <DomainBadge type={domain.type} />}
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <span className="min-w-0 flex-1 truncate">
+                      {domain.name}
+                    </span>
+                    <StatusBadge
+                      visibility={domain.visibility}
+                      className="shrink-0"
+                    />
+                    {!compact && <DomainBadge type={domain.type} />}
+                  </div>
                 </div>
               </SidebarMenuButton>
             )
 
             return (
               <SidebarMenuItem key={domain.id}>
-                {domain.type === "custom" ? (
-                  <ManageDomainDialog
-                    domain={domain}
-                    onUpdated={updateDomain}
-                    onDeleted={removeDomain}
-                  >
+                {canManageDomain ? (
+                  <ManageDomainDialog domain={domain} onUpdated={updateDomain}>
                     {row}
                   </ManageDomainDialog>
                 ) : (
@@ -197,70 +226,19 @@ function ManageDomainDialog({
   domain,
   children,
   onUpdated,
-  onDeleted,
 }: {
   domain: Domain
   children: ReactNode
   onUpdated: (domain: Domain) => void
-  onDeleted: (id: string) => void
 }) {
   const [open, setOpen] = useState(false)
-  const [name, setName] = useState(domain.name)
-  const [error, setError] = useState("")
-  const [isSaving, setIsSaving] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
-
-  async function handleUpdate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const normalizedName = name.trim().toLowerCase()
-
-    if (!isValidDomain(normalizedName)) {
-      setError("Invalid domain format")
-      return
-    }
-
-    setError("")
-    setIsSaving(true)
-
-    try {
-      const nextDomain = await updateDomainRequest(domain.id, normalizedName)
-      onUpdated(nextDomain)
-      toast.success("Domain updated")
-      setOpen(false)
-    } catch (caughtError) {
-      const message =
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to update domain"
-      setError(message)
-      toast.error(message)
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  async function handleDelete() {
-    const confirmed = window.confirm(`Delete domain ${domain.name}?`)
-    if (!confirmed) return
-
-    setIsDeleting(true)
-
-    try {
-      await deleteDomain(domain.id)
-      onDeleted(domain.id)
-      toast.success("Domain deleted")
-      setOpen(false)
-    } catch (caughtError) {
-      const message =
-        caughtError instanceof Error
-          ? caughtError.message
-          : "Failed to delete domain"
-      setError(message)
-      toast.error(message)
-    } finally {
-      setIsDeleting(false)
-    }
-  }
+  const [voucherCode, setVoucherCode] = useState("")
+  const [voucherError, setVoucherError] = useState("")
+  const [isRedeeming, setIsRedeeming] = useState(false)
+  const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false)
+  const privateUntilLabel = formatPrivateUntil(domain.privateUntil)
+  const isPrivate = domain.visibility === "private"
+  const canTogglePrivate = hasPrivateAccessWindow(domain)
 
   return (
     <Dialog
@@ -268,61 +246,165 @@ function ManageDomainDialog({
       onOpenChange={(nextOpen) => {
         setOpen(nextOpen)
         if (nextOpen) {
-          setName(domain.name)
-          setError("")
+          setVoucherCode("")
+          setVoucherError("")
         }
       }}
     >
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="p-0 sm:max-w-md">
-        <form onSubmit={(event) => void handleUpdate(event)}>
+        <div>
           <DialogHeader className="p-4 pb-3">
-            <DialogTitle>Manage domain</DialogTitle>
+            <DialogTitle>Redeem Voucher</DialogTitle>
             <DialogDescription>
-              Change or delete a custom domain. Renaming still requires
-              passing MX verification.
+              Manage access for this domain in `/inbox`.
             </DialogDescription>
           </DialogHeader>
           <Separator />
           <div className="p-4">
             <FieldGroup>
-              <Field data-invalid={Boolean(error)}>
-                <FieldLabel htmlFor={`domain-${domain.id}`}>Domain</FieldLabel>
-                <Input
-                  id={`domain-${domain.id}`}
-                  value={name}
-                  disabled={isSaving || isDeleting}
-                  aria-invalid={Boolean(error)}
-                  onChange={(event) => {
-                    setName(event.target.value)
-                    setError("")
-                  }}
-                />
-                <FieldError>{error}</FieldError>
+              <Field>
+                <div className="rounded-md border border-input bg-muted/30 px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 truncate text-muted-foreground">
+                      {privateUntilLabel
+                        ? `Active until ${privateUntilLabel}`
+                        : ""}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <StatusBadge visibility={domain.visibility} />
+                      {canTogglePrivate ? (
+                        <div className="flex items-center">
+                          <Switch
+                            id={`domain-private-${domain.id}`}
+                            checked={isPrivate}
+                            disabled={isUpdatingVisibility}
+                            onCheckedChange={async (checked) => {
+                              setIsUpdatingVisibility(true)
+
+                              try {
+                                const nextDomain = await setDomainVisibility(
+                                  domain.id,
+                                  checked ? "private" : "public"
+                                )
+                                onUpdated(nextDomain)
+                                toast.success(
+                                  checked
+                                    ? "Domain switched to private"
+                                    : "Domain switched to public"
+                                )
+                              } catch (caughtError) {
+                                toast.error(
+                                  caughtError instanceof Error
+                                    ? caughtError.message
+                                    : "Failed to update domain access"
+                                )
+                              } finally {
+                                setIsUpdatingVisibility(false)
+                              }
+                            }}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
               </Field>
+              {!canTogglePrivate ? (
+                <Field data-invalid={Boolean(voucherError)}>
+                  <FieldLabel htmlFor={`voucher-${domain.id}`}>
+                    Private Access Voucher
+                  </FieldLabel>
+                  <Input
+                    id={`voucher-${domain.id}`}
+                    value={voucherCode}
+                    disabled={isRedeeming}
+                    aria-invalid={Boolean(voucherError)}
+                    placeholder="Enter voucher code"
+                    onChange={(event) => {
+                      setVoucherCode(event.target.value.toUpperCase())
+                      setVoucherError("")
+                    }}
+                  />
+                  <FieldError>{voucherError}</FieldError>
+                </Field>
+              ) : null}
+              {!canTogglePrivate ? (
+                <p className="text-sm text-muted-foreground">
+                  Guests can still access this domain until a valid voucher is
+                  redeemed.
+                </p>
+              ) : null}
             </FieldGroup>
           </div>
-          <DialogFooter className="mx-0 mb-0 rounded-none border-t p-4">
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={isSaving || isDeleting}
-              onClick={() => void handleDelete()}
-            >
-              {isDeleting ? (
-                <Spinner data-icon="inline-start" />
-              ) : (
-                <Trash2Icon data-icon="inline-start" />
-              )}
-              Delete
-            </Button>
-            <Button type="submit" disabled={isSaving || isDeleting}>
-              {isSaving && <Spinner data-icon="inline-start" />}
-              Save
-            </Button>
-          </DialogFooter>
-        </form>
+          {!canTogglePrivate ? (
+            <DialogFooter className="mx-0 mb-0 rounded-none border-t p-4">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isRedeeming}
+                onClick={async () => {
+                  const normalizedCode = voucherCode.trim().toUpperCase()
+
+                  if (!normalizedCode) {
+                    setVoucherError("Enter a voucher code")
+                    return
+                  }
+
+                  setVoucherError("")
+                  setIsRedeeming(true)
+
+                  try {
+                    const redeemedDomain = await redeemDomainVoucher(
+                      domain.id,
+                      normalizedCode
+                    )
+                    onUpdated({
+                      ...domain,
+                      visibility: redeemedDomain.visibility,
+                      privateUntil: redeemedDomain.privateUntil ?? null,
+                      isVerified: true,
+                    })
+                    toast.success("Domain is now private")
+                    setVoucherCode("")
+                    setOpen(false)
+                  } catch (caughtError) {
+                    const message =
+                      caughtError instanceof Error
+                        ? caughtError.message
+                        : "Failed to redeem voucher"
+                    setVoucherError(message)
+                    toast.error(message)
+                  } finally {
+                    setIsRedeeming(false)
+                  }
+                }}
+              >
+                {isRedeeming ? (
+                  <Spinner data-icon="inline-start" />
+                ) : (
+                  <RefreshCwIcon data-icon="inline-start" />
+                )}
+                Redeem
+              </Button>
+            </DialogFooter>
+          ) : null}
+        </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function StatusBadge({
+  visibility = "public",
+  className,
+}: {
+  visibility?: Domain["visibility"]
+  className?: string
+}) {
+  return (
+    <Badge variant="outline" className={className}>
+      {visibility === "private" ? "Private" : "Public"}
+    </Badge>
   )
 }

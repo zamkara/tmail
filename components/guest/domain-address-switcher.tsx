@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { GlobeIcon, LogIn, MailIcon, Plus, RefreshCwIcon, SearchIcon } from "lucide-react"
+import {
+  GlobeIcon,
+  LogIn,
+  MailIcon,
+  Plus,
+  RefreshCwIcon,
+  SearchIcon,
+} from "lucide-react"
 import { Command as CommandPrimitive } from "cmdk"
 import { toast } from "sonner"
 
@@ -49,7 +56,9 @@ interface DomainAddressSwitcherProps {
   hideGenerate?: boolean
 }
 
-export default function DomainAddressSwitcher({ hideGenerate }: DomainAddressSwitcherProps) {
+export default function DomainAddressSwitcher({
+  hideGenerate,
+}: DomainAddressSwitcherProps) {
   const [open, setOpen] = useState(false)
   const [isLoadingDomains, setIsLoadingDomains] = useState(true)
   const [loadingDomainId, setLoadingDomainId] = useState<string | null>(null)
@@ -97,7 +106,9 @@ export default function DomainAddressSwitcher({ hideGenerate }: DomainAddressSwi
       } catch (error) {
         if (!cancelled) {
           console.error("Failed to load domains:", error)
-          toast.error("Failed to connect to email server")
+          toast.error(
+            error instanceof Error ? error.message : "Failed to load domains"
+          )
           setDomains([])
         }
       } finally {
@@ -200,9 +211,7 @@ export default function DomainAddressSwitcher({ hideGenerate }: DomainAddressSwi
           onClick={() => setOpen(true)}
           disabled={isLoadingDomains}
         >
-          {isLoadingDomains ? (
-            <Spinner data-icon="inline-start" />
-          ) : null}
+          {isLoadingDomains ? <Spinner data-icon="inline-start" /> : null}
           <span className="min-w-0 flex-1 truncate text-left">
             {isLoadingDomains
               ? "Loading domains..."
@@ -219,7 +228,9 @@ export default function DomainAddressSwitcher({ hideGenerate }: DomainAddressSwi
             size="icon-lg"
             aria-label="Generate random email address"
             disabled={
-              isSelectingDomain || isLoadingDomains || sortedDomains.length === 0
+              isSelectingDomain ||
+              isLoadingDomains ||
+              sortedDomains.length === 0
             }
             onClick={() => void handleGenerateRandomAddress()}
           >
@@ -237,7 +248,7 @@ export default function DomainAddressSwitcher({ hideGenerate }: DomainAddressSwi
       >
         <Command>
           <div className="flex items-center gap-2 p-1 pb-0">
-            <InputGroup className="flex-1 h-8! rounded-lg! border-input/30 bg-input/30 shadow-none! *:data-[slot=input-group-addon]:pl-2!">
+            <InputGroup className="h-8! flex-1 rounded-lg! border-input/30 bg-input/30 shadow-none! *:data-[slot=input-group-addon]:pl-2!">
               <CommandPrimitive.Input
                 data-slot="command-input"
                 className="w-full text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
@@ -247,7 +258,12 @@ export default function DomainAddressSwitcher({ hideGenerate }: DomainAddressSwi
                 <SearchIcon className="shrink-0 opacity-50" />
               </InputGroupAddon>
             </InputGroup>
-            <Button variant="default" size="default" asChild className="shrink-0">
+            <Button
+              variant="default"
+              size="default"
+              asChild
+              className="shrink-0"
+            >
               <Link href="/inbox" className="relative overflow-hidden">
                 {showLogin ? (
                   <LogIn className="size-4" />

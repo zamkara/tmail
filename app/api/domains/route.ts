@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 
 import { getAuthUser } from "@/lib/auth"
 import { connectDB } from "@/lib/db"
+import { canSeeDomain } from "@/lib/domain-access"
 import {
   getMxVerificationError,
   isValidDomain,
@@ -10,83 +11,50 @@ import {
   normalizeDnsHost,
   normalizeDomain,
 } from "@/lib/domain-validation"
-import { Domain } from "@/models/domain.model"
+import { syncSystemDomainsFromEmailApi } from "@/lib/system-domains"
+import { Domain as DomainModel } from "@/models/domain.model"
 
-const EMAIL_API = process.env.NEXT_PUBLIC_EMAIL_API_URL
-const DOMAIN_FETCH_TIMEOUT_MS = 3000
-
-// GET /api/domains — domain sistem dari BE email, custom domain dari MongoDB (butuh auth)
+// GET /api/domains — semua domain dibaca dari MongoDB.
+// Kalau belum ada system domain di DB, import sekali dari backend email API.
 export async function GET() {
-  const auth = await getAuthUser()
-
-  const systemDomains = await getSystemDomains()
-
-  if (!auth) return NextResponse.json(systemDomains)
-
-  await connectDB()
-  const customDomains = await Domain.find({ userId: auth.userId }).lean()
-
-  return NextResponse.json([
-    ...systemDomains,
-    ...customDomains.map((d) => ({
-      id: d._id.toString(),
-      name: d.name,
-      type: d.type,
-      isVerified: d.isVerified,
-      addedAt: d.createdAt,
-    })),
-  ])
-}
-
-async function getSystemDomains(): Promise<
-  Array<{
-    id: string
-    name: string
-    type: "system"
-    isVerified: boolean
-    addedAt: string
-  }>
-> {
-  if (!EMAIL_API) {
-    console.error("NEXT_PUBLIC_EMAIL_API_URL is not configured")
-    return []
-  }
-
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), DOMAIN_FETCH_TIMEOUT_MS)
-
   try {
-    const beRes = await fetch(`${EMAIL_API}/domains`, {
-      cache: "no-store",
-      signal: controller.signal,
-    })
+    const auth = await getAuthUser()
 
-    if (!beRes.ok) {
-      console.error(`Email API returned status: ${beRes.status}`)
-      return []
+    await connectDB()
+
+    const systemCount = await DomainModel.countDocuments({ type: "system" })
+    if (systemCount === 0) {
+      await syncSystemDomainsFromEmailApi()
     }
 
-    const beData = (await beRes.json()) as {
-      domains: Array<{ domain: string }>
-    }
+    const domains = await DomainModel.find({}).sort({ type: 1, name: 1 }).lean()
 
-    if (!beData.domains || !Array.isArray(beData.domains)) {
-      console.error("Invalid response format from email API")
-      return []
-    }
-
-    return beData.domains.map((d, i) => ({
-      id: `sys_${i}_${d.domain}`,
-      name: d.domain,
-      type: "system" as const,
-      isVerified: true,
-      addedAt: new Date(0).toISOString(),
-    }))
+    return NextResponse.json(
+      domains
+        .filter((domain) => canSeeDomain(domain, auth?.userId ?? null))
+        .map((domain) => ({
+          id: domain._id.toString(),
+          name: domain.name,
+          type: domain.type,
+          addedAt: domain.createdAt,
+          isVerified: domain.isVerified,
+          visibility: domain.visibility ?? "public",
+          privateUntil: domain.privateUntil,
+          isBanned: domain.isBanned ?? false,
+          isOwnedByUser: Boolean(
+            auth?.userId && domain.userId?.toString() === auth.userId
+          ),
+        }))
+    )
   } catch (error) {
-    console.error("Failed to fetch system domains:", error)
-    return []
-  } finally {
-    clearTimeout(timeout)
+    console.error("[domains:get]", error)
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error ? error.message : "Failed to load domains",
+      },
+      { status: 500 }
+    )
   }
 }
 
@@ -116,7 +84,7 @@ export async function POST(req: Request) {
 
   await connectDB()
 
-  const existing = await Domain.findOne({ name: normalized })
+  const existing = await DomainModel.findOne({ name: normalized })
   if (existing) {
     return NextResponse.json(
       { error: "Domain already registered" },
@@ -124,10 +92,12 @@ export async function POST(req: Request) {
     )
   }
 
-  const domain = await Domain.create({
+  const domain = await DomainModel.create({
     name: normalized,
     type: "custom",
     isVerified: true,
+    visibility: "public",
+    privateUntil: null,
     userId: auth.userId,
   })
 
@@ -137,5 +107,9 @@ export async function POST(req: Request) {
     type: domain.type,
     isVerified: domain.isVerified,
     addedAt: domain.createdAt,
+    visibility: domain.visibility ?? "public",
+    privateUntil: domain.privateUntil,
+    isBanned: domain.isBanned ?? false,
+    isOwnedByUser: true,
   })
 }
