@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# DEPLOY.SH — Blue-green deploy with Podman
+# Tmail Tmail — Blue-green deploy with Podman
 # ============================================================================
 set -e
 

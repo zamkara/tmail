@@ -17,13 +17,13 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-admin-voucher-domain-controls"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-update-deploy-script"
 
 git checkout -b "$BRANCH_NAME"
 
 git add -A
 
-COMMIT_MSG="feat: admin console overhaul and voucher-based domain controls
+COMMIT_MSG="feat: update script deploy
 
 Perubahan utama:
 - app/api/admin/* + components/admin/admin-session-dialog.tsx: tambah admin console untuk overview, accounts, domains, addresses, vouchers, dan limits
