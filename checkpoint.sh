@@ -17,28 +17,46 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-fix-admin-cookie-mobile-bg"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-sync-guest-inbox-address-flow"
 
-git checkout -b "$BRANCH_NAME"
+if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
+  git checkout "$BRANCH_NAME"
+else
+  git checkout -b "$BRANCH_NAME"
+fi
 
 git add -A
 
-COMMIT_MSG="feat: fix admin session cookie dan disable background animation di mobile
+COMMIT_MSG=$(cat <<'EOF'
+feat: sinkronkan flow guest dan inbox address management
 
 Perubahan utama:
-- app/api/admin/session/route.ts: cookie admin sekarang hanya `Secure` saat request benar-benar HTTPS, termasuk support `x-forwarded-proto` dari reverse proxy
-- app/api/admin/session/route.ts: login admin via HTTP direct IP:port tidak lagi gagal simpan session cookie di browser
-- components/shared/desktop-only.tsx: tambah wrapper client-only untuk mencegah background animation mount di mobile
-- app/page.tsx: disable `ShootingStars` dan `Aurora` di mobile
-- app/signin/page.tsx: disable `PixelBlast` di mobile supaya beban GPU/CPU turun
+- app/api/addresses/route.ts: generate address user login sekarang merotasi `Alamat Aktif` saat slot `maxAddressesPerUser` penuh, bukan melempar `Address limit reached`
+- app/api/addresses/route.ts + services/address.service.ts: response create address sekarang mengembalikan snapshot `activeAddresses` supaya UI langsung sinkron setelah backend menonaktifkan address lama
+- stores/address.store.ts: `setAddresses` sekarang hanya menyimpan address terbaru per domain agar list `Alamat Aktif` di `/inbox` tidak menumpuk riwayat address lama
+- components/guest/domain-address-switcher.tsx dan components/guest/guest-mail-workspace.tsx: guest `/` sekarang hanya memakai domain `public`, termasuk untuk random/auto generate
+- components/guest/inbox-cta-button.tsx + components/guest/guest-navbar.tsx: tombol `Login/Add Domain` dipindah ke navbar dan `DomainAddressSwitcher` dipindah ke header mobile
+- components/guest/guest-mail-workspace.tsx: ukuran teks address editor mobile dikembalikan ke ukuran default
+- components/admin/admin-session-dialog.tsx: badge tameng floating hanya tampil saat sesi admin aktif
+- endpoint admin/settings/domain/user/voucher/address dan inbox state: opsi Mongoose `new: true` diganti ke `returnDocument: "after"`
+- toast create address di sidebar/guest sekarang menampilkan pesan backend yang sebenarnya, bukan pesan generik
 
 Testing:
-- [ ] Login admin di HTTP `:8901` berhasil dan `/api/admin/overview` tidak lagi `401 Unauthorized`
-- [ ] Login admin di HTTPS atau reverse proxy HTTPS tetap menyimpan cookie `Secure`
-- [ ] Home page di mobile tidak lagi mount background animation
-- [ ] Sign-in page di mobile tidak lagi mount `PixelBlast`
-- [ ] Desktop tetap menampilkan background animation seperti sebelumnya
-"
+- [ ] Guest page `/` hanya menampilkan domain `public`, bukan domain `private`
+- [ ] Navbar guest mobile menampilkan `DomainAddressSwitcher` di tengah dan CTA `Login/Add Domain` sebelum theme toggle
+- [ ] `Alamat Aktif` di `/inbox` hanya menyisakan satu address terbaru per domain
+- [ ] Saat slot aktif penuh, generate address baru menggusur address aktif lama tanpa `Address limit reached`
+- [ ] Setelah generate address baru saat slot penuh, list `Alamat Aktif` langsung sinkron tanpa reload
+- [ ] Badge admin floating hanya muncul saat sesi admin aktif
+EOF
+)
+
+if git diff --cached --quiet; then
+  echo ""
+  echo "Branch ready: $(git branch --show-current)"
+  echo "No staged changes to commit."
+  exit 0
+fi
 
 git commit -m "$COMMIT_MSG"
 

@@ -68,7 +68,7 @@ export async function PATCH(
 
   await connectDB()
   const user = await User.findByIdAndUpdate(userId, patch, {
-    new: true,
+    returnDocument: "after",
   })
     .select("_id name email createdAt updatedAt")
     .lean()

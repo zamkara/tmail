@@ -40,7 +40,12 @@ import { useAuthStore } from "@/stores/auth.store"
 import { useAuroraStore } from "@/stores/aurora.store"
 import { useDomainStore } from "@/stores/domain.store"
 import { useInboxStore } from "@/stores/inbox.store"
-import type { EmailDetail, EmailItem, GeneratedAddress } from "@/types"
+import type {
+  Domain,
+  EmailDetail,
+  EmailItem,
+  GeneratedAddress,
+} from "@/types"
 
 const INBOX_REFRESH_MS = 15000
 const INBOX_FETCH_TIMEOUT_MS = 8000
@@ -139,6 +144,10 @@ function createGuestAddress(
   }
 }
 
+function getPublicDomains(domains: Domain[]) {
+  return domains.filter((domain) => domain.visibility !== "private")
+}
+
 async function fetchJsonWithTimeout<T>(url: string): Promise<T> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), INBOX_FETCH_TIMEOUT_MS)
@@ -172,7 +181,6 @@ export default function GuestMailWorkspace() {
   const markRead = useInboxStore((state) => state.markRead)
   const resetInbox = useInboxStore((state) => state.resetInbox)
   const domains = useDomainStore((state) => state.domains)
-  const domainsLoaded = useDomainStore((state) => state.isLoaded)
   const setDomains = useDomainStore((state) => state.setDomains)
   const addAddress = useAddressStore((state) => state.addAddress)
   const updateAddress = useAddressStore((state) => state.updateAddress)
@@ -226,7 +234,7 @@ export default function GuestMailWorkspace() {
   }, [])
 
   useEffect(() => {
-    if (domains.length > 0 || domainLoadStartedRef.current) return
+    if (domainLoadStartedRef.current) return
 
     let cancelled = false
     domainLoadStartedRef.current = true
@@ -235,9 +243,9 @@ export default function GuestMailWorkspace() {
       setIsLoadingDomains(true)
 
       try {
-        const nextDomains = await getDomains()
+        const nextDomains = getPublicDomains(await getDomains())
         if (!cancelled) {
-          setDomains(nextDomains.filter((domain) => domain.type === "system"))
+          setDomains(nextDomains)
         }
       } catch (error) {
         console.error("Failed to load domains:", error)
@@ -258,7 +266,9 @@ export default function GuestMailWorkspace() {
     return () => {
       cancelled = true
     }
-  }, [domains.length, domainsLoaded, setDomains])
+  }, [setDomains])
+
+  const publicDomains = useMemo(() => getPublicDomains(domains), [domains])
 
   const activeAddress = useMemo(
     () =>
@@ -280,17 +290,21 @@ export default function GuestMailWorkspace() {
       return
     }
 
-    const firstSystemDomain = [...domains]
-      .filter((domain) => domain.type === "system")
-      .sort((first, second) => first.name.localeCompare(second.name))[0]
+    const firstAvailableDomain = [...publicDomains].sort((first, second) => {
+      if (first.type !== second.type) {
+        return first.type === "system" ? -1 : 1
+      }
 
-    if (!firstSystemDomain || autoAddressPromiseRef.current) return
+      return first.name.localeCompare(second.name)
+    })[0]
+
+    if (!firstAvailableDomain || autoAddressPromiseRef.current) return
 
     autoAddressPromiseRef.current = user
-      ? generateAddress(firstSystemDomain.id, firstSystemDomain.name, true)
+      ? generateAddress(firstAvailableDomain.id, firstAvailableDomain.name, true)
       : Promise.resolve(
           createGuestAddress(
-            firstSystemDomain,
+            firstAvailableDomain,
             appSettings?.allowWildcardSubdomains ?? true
           )
         )
@@ -303,7 +317,9 @@ export default function GuestMailWorkspace() {
       })
       .catch((error) => {
         console.error("Failed to create initial email address:", error)
-        toast.error("Failed to create email address")
+        toast.error(
+          error instanceof Error ? error.message : "Failed to create email address"
+        )
       })
       .finally(() => {
         autoAddressPromiseRef.current = null
@@ -312,9 +328,9 @@ export default function GuestMailWorkspace() {
     activeAddress,
     addAddress,
     addresses,
-    domains,
     authLoaded,
     appSettings,
+    publicDomains,
     resetInbox,
     setActiveAddress,
     user,
@@ -415,13 +431,12 @@ export default function GuestMailWorkspace() {
         ? false
         : (withSubdomain ?? useSubdomain)
     try {
-      const guestDomains = domains.filter((d) => d.type === "system")
-      if (guestDomains.length === 0) {
+      if (publicDomains.length === 0) {
         toast.error("No domains available")
         return
       }
       const picked =
-        guestDomains[Math.floor(Math.random() * guestDomains.length)]
+        publicDomains[Math.floor(Math.random() * publicDomains.length)]
       const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
       const randomLocal = Array.from(
         { length: 6 },
@@ -539,7 +554,7 @@ export default function GuestMailWorkspace() {
             <div className="flex items-center gap-2 rounded-lg border bg-muted py-2 ps-4 pe-2">
               {editAddress ? (
                 <div
-                  className="flex min-w-0 flex-1 items-center gap-0 text-lg"
+                  className="flex min-w-0 flex-1 items-center gap-0 sm:text-lg"
                   onBlur={(e) => {
                     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
                       saveAddressEdit()
@@ -575,7 +590,7 @@ export default function GuestMailWorkspace() {
                 </div>
               ) : (
                 <span
-                  className="min-w-0 flex-1 cursor-text truncate text-xl"
+                  className="min-w-0 flex-1 cursor-text truncate sm:text-xl"
                   onClick={() => startAddressEdit()}
                 >
                   <DecryptedText
@@ -595,7 +610,9 @@ export default function GuestMailWorkspace() {
               </Card>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <DomainAddressSwitcher hideGenerate />
+              <div className="hidden sm:block">
+                <DomainAddressSwitcher hideGenerate />
+              </div>
               <div
                 role="button"
                 tabIndex={!activeAddress || isWillcardLoading ? -1 : 0}

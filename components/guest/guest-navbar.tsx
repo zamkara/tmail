@@ -1,11 +1,13 @@
 "use client"
 
+import InboxCtaButton from "@/components/guest/inbox-cta-button"
+import DomainAddressSwitcher from "@/components/guest/domain-address-switcher"
 import ModeToggle from "@/components/shared/mode-toggle"
 
 export default function GuestNavbar() {
   return (
     <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center">
-      <nav className="mx-auto flex size-full max-w-4xl items-center justify-between px-4 sm:px-6 lg:px-0">
+      <nav className="relative mx-auto flex size-full max-w-4xl items-center justify-between px-4 sm:px-6 lg:px-0">
         <svg
           viewBox="0 0 384 384"
           className="size-8 fill-primary text-foreground dark:fill-foreground"
@@ -17,7 +19,13 @@ export default function GuestNavbar() {
             fillRule="evenodd"
           />
         </svg>
-        <ModeToggle />
+        <div className="absolute left-1/2 top-1/2 w-[min(58vw,15rem)] -translate-x-1/2 -translate-y-1/2 sm:hidden">
+          <DomainAddressSwitcher hideGenerate />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <InboxCtaButton mobileIconOnly className="px-2.5 sm:px-4" />
+          <ModeToggle />
+        </div>
       </nav>
     </header>
   )

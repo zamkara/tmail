@@ -246,21 +246,23 @@ export default function AdminSessionDialog() {
 
   return (
     <>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="fixed right-4 bottom-4"
-            aria-label="Open admin session"
-            onClick={() => setOpen(true)}
-          >
-            <ShieldIcon />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Admin</TooltipContent>
-      </Tooltip>
+      {status === "admin" ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="fixed right-4 bottom-4"
+              aria-label="Open admin session"
+              onClick={() => setOpen(true)}
+            >
+              <ShieldIcon />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Admin</TooltipContent>
+        </Tooltip>
+      ) : null}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[calc(100svh-2rem)] overflow-hidden sm:max-w-5xl">

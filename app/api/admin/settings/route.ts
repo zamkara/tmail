@@ -28,7 +28,7 @@ export async function PATCH(req: Request) {
   await AdminSettings.findOneAndUpdate(
     { key: "default" },
     { $set: patch, $setOnInsert: { key: "default" } },
-    { new: true, upsert: true }
+    { returnDocument: "after", upsert: true }
   )
 
   return NextResponse.json(await getAdminSettings())

@@ -107,13 +107,13 @@ export function AddressSidebar() {
       <div
         className={cn(
           "relative bg-transparent transition-[width] duration-200 ease-linear",
-          open ? "w-[350px]" : "w-12"
+          open ? "w-87.5" : "w-12"
         )}
       />
       <aside
         className={cn(
           "fixed inset-y-0 right-0 z-10 hidden h-svh border-l bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-linear md:flex",
-          open ? "w-[350px]" : "w-12"
+          open ? "w-87.5" : "w-12"
         )}
       >
         <div className="flex size-full min-w-0 flex-col">
@@ -281,8 +281,12 @@ function CollapsedDomainButton({ domain }: { domain: Domain }) {
       resetInbox()
       addAddress(address)
       toast.success("Email address created")
-    } catch {
-      toast.error("Failed to create email address")
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to create email address"
+      )
     } finally {
       setIsLoading(false)
     }

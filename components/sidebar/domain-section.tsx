@@ -137,8 +137,10 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
       setActiveAddress(address.id)
       router.push(buildInboxHref(address))
       toast.success("Email address created")
-    } catch {
-      toast.error("Failed to create email address")
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create email address"
+      )
     } finally {
       setLoadingDomainId(null)
     }
