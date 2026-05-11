@@ -48,7 +48,7 @@ export async function PATCH(
 
   await connectDB()
   const voucher = await Voucher.findByIdAndUpdate(voucherId, patch, {
-    new: true,
+    returnDocument: "after",
   }).lean()
 
   if (!voucher) {

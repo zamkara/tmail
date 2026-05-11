@@ -23,9 +23,9 @@ export function AuthLoader() {
         if (user) {
           const addresses = await getAddresses()
           if (!cancelled) {
+            const activeAddressId = useAddressStore.getState().activeAddressId
             setAddresses(addresses)
 
-            const activeAddressId = useAddressStore.getState().activeAddressId
             const hasActiveAddress = addresses.some(
               (address) => address.id === activeAddressId
             )

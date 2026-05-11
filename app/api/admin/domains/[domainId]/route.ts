@@ -98,7 +98,7 @@ export async function PATCH(
   }
 
   const domain = await Domain.findByIdAndUpdate(domainId, patch, {
-    new: true,
+    returnDocument: "after",
   }).lean()
 
   return NextResponse.json({

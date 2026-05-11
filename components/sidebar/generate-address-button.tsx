@@ -50,8 +50,10 @@ export default function GenerateAddressButton({
       addAddress(address)
       setActiveAddress(address.id)
       toast.success("Email address created")
-    } catch {
-      toast.error("Failed to create email address")
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create email address"
+      )
     } finally {
       setIsLoading(false)
     }

@@ -1,15 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import Link from "next/link"
-import {
-  GlobeIcon,
-  LogIn,
-  MailIcon,
-  Plus,
-  RefreshCwIcon,
-  SearchIcon,
-} from "lucide-react"
+import { GlobeIcon, MailIcon, RefreshCwIcon, SearchIcon } from "lucide-react"
 import { Command as CommandPrimitive } from "cmdk"
 import { toast } from "sonner"
 
@@ -24,6 +16,7 @@ import {
 } from "@/components/ui/command"
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
+import InboxCtaButton from "@/components/guest/inbox-cta-button"
 import { generateAddress } from "@/services/address.service"
 import { getDomains } from "@/services/domain.service"
 import { useAddressStore } from "@/stores/address.store"
@@ -37,13 +30,17 @@ function isAddressAvailable(address: GeneratedAddress) {
 }
 
 function sortDomains(domains: Domain[]) {
-  return [...domains].sort((first, second) =>
-    first.name.localeCompare(second.name)
-  )
+  return [...domains].sort((first, second) => {
+    if (first.type !== second.type) {
+      return first.type === "system" ? -1 : 1
+    }
+
+    return first.name.localeCompare(second.name)
+  })
 }
 
-function getGuestDomains(domains: Domain[]) {
-  return domains.filter((domain) => domain.type === "system")
+function getPublicDomains(domains: Domain[]) {
+  return domains.filter((domain) => domain.visibility !== "private")
 }
 
 function findReusableAddress(addresses: GeneratedAddress[], domainId: string) {
@@ -62,15 +59,6 @@ export default function DomainAddressSwitcher({
   const [open, setOpen] = useState(false)
   const [isLoadingDomains, setIsLoadingDomains] = useState(true)
   const [loadingDomainId, setLoadingDomainId] = useState<string | null>(null)
-  const [showLogin, setShowLogin] = useState(true)
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setShowLogin((prev) => !prev)
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [])
-
   const domains = useDomainStore((state) => state.domains)
   const setDomains = useDomainStore((state) => state.setDomains)
 
@@ -93,15 +81,14 @@ export default function DomainAddressSwitcher({
     async function loadDomains() {
       setIsLoadingDomains(true)
       try {
-        const nextDomains = await getDomains()
-        const systemDomains = getGuestDomains(nextDomains)
+        const nextDomains = getPublicDomains(await getDomains())
 
         if (!cancelled) {
-          if (systemDomains.length === 0) {
-            console.warn("No system domains returned from API")
+          if (nextDomains.length === 0) {
+            console.warn("No public domains returned from API")
             toast.error("Failed to load domains from server")
           }
-          setDomains(systemDomains)
+          setDomains(nextDomains)
         }
       } catch (error) {
         if (!cancelled) {
@@ -126,7 +113,7 @@ export default function DomainAddressSwitcher({
   }, [setDomains])
 
   const sortedDomains = useMemo(
-    () => sortDomains(getGuestDomains(domains)),
+    () => sortDomains(getPublicDomains(domains)),
     [domains]
   )
   const activeAddress = useMemo(
@@ -160,8 +147,10 @@ export default function DomainAddressSwitcher({
       setActiveAddress(address.id)
       toast.success("Email address created")
       setOpen(false)
-    } catch {
-      toast.error("Failed to create email address")
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create email address"
+      )
     } finally {
       setLoadingDomainId(null)
     }
@@ -188,8 +177,10 @@ export default function DomainAddressSwitcher({
       addAddress(address)
       setActiveAddress(address.id)
       toast.success("Email address created")
-    } catch {
-      toast.error("Failed to create email address")
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create email address"
+      )
     } finally {
       setLoadingDomainId(null)
     }
@@ -258,40 +249,7 @@ export default function DomainAddressSwitcher({
                 <SearchIcon className="shrink-0 opacity-50" />
               </InputGroupAddon>
             </InputGroup>
-            <Button
-              variant="default"
-              size="default"
-              asChild
-              className="shrink-0"
-            >
-              <Link href="/inbox" className="relative overflow-hidden">
-                {showLogin ? (
-                  <LogIn className="size-4" />
-                ) : (
-                  <Plus className="size-4" />
-                )}
-                <span className="relative h-5 w-22 overflow-hidden">
-                  <span
-                    className={`absolute inset-0 flex items-center transition-all duration-500 ${
-                      showLogin
-                        ? "translate-y-0 opacity-100"
-                        : "-translate-y-full opacity-0"
-                    }`}
-                  >
-                    Login
-                  </span>
-                  <span
-                    className={`absolute inset-0 flex items-center transition-all duration-500 ${
-                      showLogin
-                        ? "translate-y-full opacity-0"
-                        : "translate-y-0 opacity-100"
-                    }`}
-                  >
-                    Add Domain
-                  </span>
-                </span>
-              </Link>
-            </Button>
+            <InboxCtaButton className="shrink-0" />
           </div>
           <CommandList>
             {isLoadingDomains ? (

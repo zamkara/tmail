@@ -55,7 +55,7 @@ export async function POST(req: Request) {
           spamSenders: body.spamSenders ?? [],
         },
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     )
 
     return NextResponse.json(state)

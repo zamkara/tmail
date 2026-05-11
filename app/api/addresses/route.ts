@@ -13,6 +13,34 @@ import {
   isRateLimitError,
 } from "@/lib/rate-limit"
 
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+}
+
+function serializeAddresses(
+  addresses: Array<{
+    _id: { toString(): string }
+    address: string
+    domainId: { toString(): string }
+    createdAt: Date
+    expiresAt: Date
+  }>,
+  username: string
+) {
+  return addresses.map((address) => ({
+    id: address._id.toString(),
+    address: address.address,
+    domainId: address.domainId.toString(),
+    domainName: address.address.split("@")[1] ?? "",
+    username,
+    createdAt: address.createdAt,
+    expiresAt: address.expiresAt,
+  }))
+}
+
 // GET /api/addresses — ambil semua address milik user yang belum expired
 export async function GET() {
   const auth = await getAuthUser()
@@ -29,18 +57,9 @@ export async function GET() {
     userId: auth.userId,
     expiresAt: { $gt: new Date() },
   }).lean()
+  const username = slugify(user.name)
 
-  return NextResponse.json(
-    addresses.map((a) => ({
-      id: a._id.toString(),
-      address: a.address,
-      domainId: a.domainId.toString(),
-      domainName: a.address.split("@")[1] ?? "",
-      username: slugify(user.name),
-      createdAt: a.createdAt,
-      expiresAt: a.expiresAt,
-    }))
-  )
+  return NextResponse.json(serializeAddresses(addresses, username))
 }
 
 // POST /api/addresses — generate address baru untuk domain tertentu
@@ -66,17 +85,7 @@ export async function POST(req: Request) {
 
     await connectDB()
     const settings = await getAdminSettings()
-    const activeAddressCount = await Address.countDocuments({
-      userId: auth.userId,
-      expiresAt: { $gt: new Date() },
-    })
-
-    if (activeAddressCount >= settings.maxAddressesPerUser) {
-      return NextResponse.json(
-        { error: "Address limit reached" },
-        { status: 429 }
-      )
-    }
+    const now = new Date()
 
     const domain = await Domain.findById(domainId)
 
@@ -106,7 +115,36 @@ export async function POST(req: Request) {
       () => chars[Math.floor(Math.random() * chars.length)]
     ).join("")
 
-    const now = new Date()
+    await Address.updateMany(
+      {
+        userId: auth.userId,
+        domainId: domain._id,
+        expiresAt: { $gt: now },
+      },
+      { $set: { expiresAt: now } }
+    )
+
+    const remainingActiveAddresses = await Address.find({
+      userId: auth.userId,
+      expiresAt: { $gt: now },
+    })
+      .sort({ createdAt: 1, _id: 1 })
+      .lean()
+
+    const overflowCount =
+      remainingActiveAddresses.length - settings.maxAddressesPerUser + 1
+
+    if (overflowCount > 0) {
+      const addressIdsToExpire = remainingActiveAddresses
+        .slice(0, overflowCount)
+        .map((address) => address._id)
+
+      await Address.updateMany(
+        { _id: { $in: addressIdsToExpire } },
+        { $set: { expiresAt: now } }
+      )
+    }
+
     const expiresAt = new Date(
       now.getTime() + settings.addressTtlHours * 60 * 60 * 1000
     )
@@ -117,15 +155,23 @@ export async function POST(req: Request) {
       userId: auth.userId,
       expiresAt,
     })
+    const refreshedAddresses = await Address.find({
+      userId: auth.userId,
+      expiresAt: { $gt: now },
+    }).lean()
+    const username = slugify(user.name)
 
     return NextResponse.json({
-      id: address._id.toString(),
-      address: address.address,
-      domainId: address.domainId.toString(),
-      domainName: domain.name,
-      username: slugify(user.name),
-      createdAt: address.createdAt,
-      expiresAt: address.expiresAt,
+      address: {
+        id: address._id.toString(),
+        address: address.address,
+        domainId: address.domainId.toString(),
+        domainName: domain.name,
+        username,
+        createdAt: address.createdAt,
+        expiresAt: address.expiresAt,
+      },
+      activeAddresses: serializeAddresses(refreshedAddresses, username),
     })
   } catch (error) {
     if (isRateLimitError(error)) {
@@ -134,11 +180,4 @@ export async function POST(req: Request) {
 
     throw error
   }
-}
-
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
 }

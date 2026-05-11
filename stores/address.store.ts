@@ -15,13 +15,38 @@ interface AddressStore {
   removeExpired: () => void
 }
 
+function keepLatestAddressPerDomain(addresses: GeneratedAddress[]) {
+  const latestByDomain = new Map<string, GeneratedAddress>()
+
+  for (const address of addresses) {
+    const current = latestByDomain.get(address.domainId)
+    if (!current) {
+      latestByDomain.set(address.domainId, address)
+      continue
+    }
+
+    if (
+      new Date(address.createdAt).getTime() >
+      new Date(current.createdAt).getTime()
+    ) {
+      latestByDomain.set(address.domainId, address)
+    }
+  }
+
+  return [...latestByDomain.values()]
+}
+
 export const useAddressStore = create<AddressStore>()(
   persist(
     (set) => ({
       addresses: [],
       activeAddressId: null,
       isLoaded: false,
-      setAddresses: (addresses) => set({ addresses, isLoaded: true }),
+      setAddresses: (addresses) =>
+        set({
+          addresses: keepLatestAddressPerDomain(addresses),
+          isLoaded: true,
+        }),
       setLoaded: () => set({ isLoaded: true }),
       addAddress: (address) =>
         set((state) => ({

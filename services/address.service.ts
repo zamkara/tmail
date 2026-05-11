@@ -1,4 +1,5 @@
 import type { GeneratedAddress } from "@/types"
+import { useAddressStore } from "@/stores/address.store"
 
 // Untuk user login: ambil dari API (tersimpan di DB)
 export async function getAddresses(): Promise<GeneratedAddress[]> {
@@ -16,7 +17,19 @@ export async function generateAddressForUser(domainId: string): Promise<Generate
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error ?? "Failed to create address")
-  return data
+
+  const address = data?.address as GeneratedAddress | undefined
+  const activeAddresses = data?.activeAddresses as GeneratedAddress[] | undefined
+
+  if (!address) {
+    throw new Error("Address response missing generated address")
+  }
+
+  if (Array.isArray(activeAddresses)) {
+    useAddressStore.getState().setAddresses(activeAddresses)
+  }
+
+  return address
 }
 
 // Untuk guest: generate lokal, disimpan di localStorage via store

@@ -92,7 +92,7 @@ export async function PATCH(
   }
 
   const nextAddress = await Address.findByIdAndUpdate(addressId, patch, {
-    new: true,
+    returnDocument: "after",
   }).lean()
 
   if (!nextAddress) {
