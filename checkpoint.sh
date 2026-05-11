@@ -19,11 +19,16 @@ TIMESTAMP=$(date +"%d%m%y%H%M")
 
 BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-sync-guest-inbox-address-flow"
 
-git checkout -b "$BRANCH_NAME"
+if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
+  git checkout "$BRANCH_NAME"
+else
+  git checkout -b "$BRANCH_NAME"
+fi
 
 git add -A
 
-COMMIT_MSG="feat: sinkronkan flow guest dan inbox address management
+COMMIT_MSG=$(cat <<'EOF'
+feat: sinkronkan flow guest dan inbox address management
 
 Perubahan utama:
 - app/api/addresses/route.ts: generate address user login sekarang merotasi `Alamat Aktif` saat slot `maxAddressesPerUser` penuh, bukan melempar `Address limit reached`
@@ -33,7 +38,7 @@ Perubahan utama:
 - components/guest/inbox-cta-button.tsx + components/guest/guest-navbar.tsx: tombol `Login/Add Domain` dipindah ke navbar dan `DomainAddressSwitcher` dipindah ke header mobile
 - components/guest/guest-mail-workspace.tsx: ukuran teks address editor mobile dikembalikan ke ukuran default
 - components/admin/admin-session-dialog.tsx: badge tameng floating hanya tampil saat sesi admin aktif
-- endpoint admin/settings/domain/user/voucher/address dan inbox state: opsi Mongoose `new: true` diganti ke `returnDocument: \"after\"`
+- endpoint admin/settings/domain/user/voucher/address dan inbox state: opsi Mongoose `new: true` diganti ke `returnDocument: "after"`
 - toast create address di sidebar/guest sekarang menampilkan pesan backend yang sebenarnya, bukan pesan generik
 
 Testing:
@@ -43,7 +48,15 @@ Testing:
 - [ ] Saat slot aktif penuh, generate address baru menggusur address aktif lama tanpa `Address limit reached`
 - [ ] Setelah generate address baru saat slot penuh, list `Alamat Aktif` langsung sinkron tanpa reload
 - [ ] Badge admin floating hanya muncul saat sesi admin aktif
-"
+EOF
+)
+
+if git diff --cached --quiet; then
+  echo ""
+  echo "Branch ready: $(git branch --show-current)"
+  echo "No staged changes to commit."
+  exit 0
+fi
 
 git commit -m "$COMMIT_MSG"
 
