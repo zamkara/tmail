@@ -1,11 +1,21 @@
 "use client"
 
-import GuestNavbar from "@/components/guest/guest-navbar"
+import dynamic from "next/dynamic"
+
 import DesktopOnly from "@/components/shared/desktop-only"
-import GuestMailWorkspace from "@/components/guest/guest-mail-workspace"
 import Aurora from "@/components/shared/aurora"
 import ShootingStars from "@/components/shared/shooting-stars"
 import { useAuroraStore } from "@/stores/aurora.store"
+
+const GuestNavbar = dynamic(
+  () => import("@/components/guest/guest-navbar"),
+  { ssr: false }
+)
+
+const GuestMailWorkspace = dynamic(
+  () => import("@/components/guest/guest-mail-workspace"),
+  { ssr: false }
+)
 
 export default function HomePage() {
   const auroraVisible = useAuroraStore((state) => state.visible)

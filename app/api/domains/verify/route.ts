@@ -1,7 +1,6 @@
 import { resolveMx } from "node:dns/promises"
 import { NextResponse } from "next/server"
 
-import { getAuthUser } from "@/lib/auth"
 import {
   getMxVerificationError,
   isValidDomain,
@@ -11,11 +10,6 @@ import {
 } from "@/lib/domain-validation"
 
 export async function POST(req: Request) {
-  const auth = await getAuthUser()
-  if (!auth) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
   const { name } = await req.json()
   const normalized = normalizeDomain(name)
 

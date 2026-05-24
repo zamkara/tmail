@@ -1,6 +1,7 @@
 "use client"
 
-import InboxCtaButton from "@/components/guest/inbox-cta-button"
+import AddDomainDialog from "@/components/sidebar/add-domain-dialog"
+import LoginAddDomainButton from "@/components/guest/login-add-domain-button"
 import DomainAddressSwitcher from "@/components/guest/domain-address-switcher"
 import ModeToggle from "@/components/shared/mode-toggle"
 
@@ -23,7 +24,15 @@ export default function GuestNavbar() {
           <DomainAddressSwitcher hideGenerate />
         </div>
         <div className="flex items-center gap-1.5">
-          <InboxCtaButton mobileIconOnly className="px-2.5 sm:px-4" />
+          <AddDomainDialog
+            trigger={
+              <LoginAddDomainButton
+                mobileIconOnly
+                className="px-2.5 sm:px-4"
+              />
+            }
+            showSignInLink
+          />
           <ModeToggle />
         </div>
       </nav>

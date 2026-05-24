@@ -76,6 +76,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     navMain.find((item) => item.folder === activeFolder) ?? navMain[0]
 
   const activeAddress = resolveActiveAddress(addresses, params, activeAddressId)
+  const activeAddressEmail = activeAddress?.address ?? null
 
   const fetchEmails = React.useCallback(
     async (address: string, addr: GeneratedAddress, silent = false) => {
@@ -111,6 +112,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     [readIds]
   )
 
+  const refreshActiveAddress = React.useCallback(
+    async (silent = false) => {
+      if (!activeAddress) return
+      if (silent) {
+        setIsAutoRefreshing(true)
+      }
+
+      try {
+        await fetchEmails(activeAddress.address, activeAddress, silent)
+      } finally {
+        if (silent) {
+          setIsAutoRefreshing(false)
+        }
+      }
+    },
+    [activeAddress, fetchEmails]
+  )
+
   React.useEffect(() => {
     emailsRef.current = emails
   }, [emails])
@@ -122,43 +141,41 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       return
     }
 
-      let cancelled = false
-
-      async function refresh(silent = false) {
-        if (!activeAddress || cancelled) return
-        if (!silent) {
-          await fetchEmails(activeAddress.address, activeAddress, silent)
-        } else {
-          setIsAutoRefreshing(true)
-          await fetchEmails(activeAddress.address, activeAddress, silent)
-          setIsAutoRefreshing(false)
-        }
-      }
-
-    void refresh()
+    void refreshActiveAddress()
 
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible" && navigator.onLine) {
-        void refresh(true)
+        void refreshActiveAddress(true)
       }
     }, INBOX_POLL_INTERVAL_MS)
 
     function handleVisible() {
       if (document.visibilityState === "visible") {
-        void refresh(true)
+        void refreshActiveAddress(true)
       }
+    }
+
+    function handleBackendUpdate(event: Event) {
+      const customEvent = event as CustomEvent<{
+        email?: string | null
+      }>
+      if (customEvent.detail.email && customEvent.detail.email !== activeAddressEmail) {
+        return
+      }
+      void refreshActiveAddress(true)
     }
 
     window.addEventListener("focus", handleVisible)
     document.addEventListener("visibilitychange", handleVisible)
+    window.addEventListener("tmail:backend-inbox-update", handleBackendUpdate)
 
     return () => {
-      cancelled = true
       window.clearInterval(interval)
       window.removeEventListener("focus", handleVisible)
       document.removeEventListener("visibilitychange", handleVisible)
+      window.removeEventListener("tmail:backend-inbox-update", handleBackendUpdate)
     }
-  }, [activeAddress, activeItem.folder, fetchEmails])
+  }, [activeAddress, activeAddressEmail, refreshActiveAddress])
 
   async function handleRefresh() {
     if (!activeAddress) return

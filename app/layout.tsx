@@ -1,7 +1,8 @@
-import { Geist_Mono, Inter } from "next/font/google"
+import { Geist_Mono, Google_Sans_Flex } from "next/font/google"
 
 import "./globals.css"
 import AdminSessionDialog from "@/components/admin/admin-session-dialog"
+import BackendInboxSync from "@/components/backend-inbox-sync"
 import { AuthLoader } from "@/components/auth-loader"
 import { InboxStateSync } from "@/components/inbox-state-sync"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -9,7 +10,13 @@ import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
+const googleSansFlex = Google_Sans_Flex({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  weight: "variable",
+  axes: ["slnt", "wdth", "GRAD", "ROND"],
+  adjustFontFallback: false,
+})
 
 const fontMono = Geist_Mono({
   subsets: ["latin"],
@@ -29,13 +36,14 @@ export default function RootLayout({
         "antialiased",
         fontMono.variable,
         "font-sans",
-        inter.variable
+        googleSansFlex.variable
       )}
     >
       <body>
         <ThemeProvider>
           <AuthLoader />
           <InboxStateSync />
+          <BackendInboxSync />
           <TooltipProvider>
             {children}
             <AdminSessionDialog />

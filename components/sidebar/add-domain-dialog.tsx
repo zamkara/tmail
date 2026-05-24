@@ -1,6 +1,7 @@
 "use client"
 
-import { type FormEvent, useState } from "react"
+import Link from "next/link"
+import { type FormEvent, type ReactNode, useState } from "react"
 import { CheckIcon, PlusIcon } from "lucide-react"
 import { toast } from "sonner"
 
@@ -43,11 +44,19 @@ const MAIL_SERVER_HOST = process.env.NEXT_PUBLIC_MAIL_SERVER_HOST ?? ""
 interface AddDomainDialogProps {
   iconOnly?: boolean
   className?: string
+  trigger?: ReactNode
+  showSignInLink?: boolean
+  signInHref?: string
+  signInLabel?: string
 }
 
 export default function AddDomainDialog({
   iconOnly = false,
   className,
+  trigger,
+  showSignInLink = false,
+  signInHref = "/signin",
+  signInLabel = "Sign In",
 }: AddDomainDialogProps) {
   const isMobile = useIsMobile()
   const [open, setOpen] = useState(false)
@@ -96,7 +105,7 @@ export default function AddDomainDialog({
     }
   }
 
-  const trigger = (
+  const defaultTrigger = (
     <Button
       type="button"
       variant="outline"
@@ -108,6 +117,15 @@ export default function AddDomainDialog({
       {!iconOnly && "Add Domain"}
     </Button>
   )
+
+  const authLink = showSignInLink ? (
+    <div className="border-t px-4 pb-4 pt-3 text-center text-sm text-muted-foreground">
+      Already have an account?{" "}
+      <Button asChild variant="link" className="h-auto p-0 align-baseline">
+        <Link href={signInHref}>{signInLabel}</Link>
+      </Button>
+    </div>
+  ) : null
 
   const body = (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -168,7 +186,7 @@ export default function AddDomainDialog({
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={setOpen} direction="bottom">
-        <DrawerTrigger asChild>{trigger}</DrawerTrigger>
+        <DrawerTrigger asChild>{trigger ?? defaultTrigger}</DrawerTrigger>
         <DrawerContent className="w-full overflow-hidden">
           <form
             className="flex min-h-0 flex-1 flex-col"
@@ -180,6 +198,7 @@ export default function AddDomainDialog({
             <Separator />
             {body}
             <DrawerFooter className="border-t">{submitButton}</DrawerFooter>
+            {authLink}
           </form>
         </DrawerContent>
       </Drawer>
@@ -188,7 +207,7 @@ export default function AddDomainDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogTrigger asChild>{trigger ?? defaultTrigger}</DialogTrigger>
       <DialogContent className="overflow-hidden p-0">
         <form
           className="flex min-h-0 flex-col"
@@ -202,6 +221,7 @@ export default function AddDomainDialog({
           <DialogFooter className="mx-0 mb-0 rounded-none border-t p-4">
             {submitButton}
           </DialogFooter>
+          {authLink}
         </form>
       </DialogContent>
     </Dialog>

@@ -1,7 +1,10 @@
 import type { Types } from "mongoose"
 
+import { resolveDomainSource } from "@/lib/domain-source"
+
 type DomainAccessInput = {
   type: "system" | "custom"
+  source?: "system" | "user" | "guest" | null
   visibility?: "public" | "private" | null
   privateUntil?: Date | string | null
   isVerified?: boolean | null
@@ -35,7 +38,7 @@ export function canUseDomain(
   now = new Date()
 ) {
   if (!domain.isVerified || domain.isBanned) return false
-  if (domain.type === "system") return true
+  if (resolveDomainSource(domain) === "system") return true
   if (domain.visibility !== "private") return true
   if (!isPrivateActive(domain, now)) return false
 
@@ -48,7 +51,7 @@ export function canSeeDomain(
   now = new Date()
 ) {
   if (!domain.isVerified || domain.isBanned) return false
-  if (domain.type === "system") return true
+  if (resolveDomainSource(domain) === "system") return true
   if (domain.visibility !== "private") return true
 
   return Boolean(userId && domain.userId?.toString() === userId)

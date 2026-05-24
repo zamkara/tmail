@@ -1,9 +1,11 @@
 export type DomainType = "system" | "custom"
+export type DomainSource = "system" | "user" | "guest"
 
 export interface Domain {
   id: string
   name: string
   type: DomainType
+  source: DomainSource
   addedAt: string
   isVerified: boolean
   visibility?: "public" | "private"

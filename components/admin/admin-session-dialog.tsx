@@ -16,6 +16,7 @@ import {
   UsersIcon,
   TicketIcon,
 } from "lucide-react"
+import Link from "next/link"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
@@ -83,6 +84,7 @@ interface AdminDomain {
   id: string
   name: string
   type: "system" | "custom"
+  source: "system" | "user" | "guest"
   isVerified: boolean
   visibility: "public" | "private"
   privateUntil: string | null
@@ -106,7 +108,14 @@ interface AdminAddress {
   userId: string
   domainId: string
   user: { id: string; name: string; email: string } | null
-  domain: { id: string; name: string; type: "system" | "custom" } | null
+  domain:
+    | {
+        id: string
+        name: string
+        type: "system" | "custom"
+        source: "system" | "user" | "guest"
+      }
+    | null
   expiresAt: string
   createdAt: string
 }
@@ -271,6 +280,9 @@ export default function AdminSessionDialog() {
             <DialogDescription>
               Sign in to access application management tools.
             </DialogDescription>
+            <Button asChild variant="outline" className="mt-2 w-fit">
+              <Link href="/dashboard">Open Backend Console</Link>
+            </Button>
           </DialogHeader>
 
           {status === "checking" ? (
@@ -1498,6 +1510,7 @@ function DomainsModule({
                 </TableHead>
                 <TableHead>Domain</TableHead>
                 <TableHead>Type</TableHead>
+                <TableHead>Source</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Owner</TableHead>
                 <TableHead className="w-24" />
@@ -1507,7 +1520,7 @@ function DomainsModule({
               {domains.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className="py-8 text-center text-muted-foreground"
                   >
                     No domains yet
@@ -1535,6 +1548,15 @@ function DomainsModule({
                       {domain.type}
                     </TableCell>
                     <TableCell>
+                      <Badge variant="outline">
+                        {domain.source === "system"
+                          ? "System"
+                          : domain.source === "user"
+                            ? "User"
+                            : "Guest"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       <div className="flex items-center gap-1.5">
                         <Badge
                           variant={domain.isVerified ? "default" : "secondary"}
@@ -1547,7 +1569,8 @@ function DomainsModule({
                       </div>
                     </TableCell>
                     <TableCell className="max-w-32 truncate text-muted-foreground">
-                      {domain.owner?.email ?? "System"}
+                      {domain.owner?.email ??
+                        (domain.source === "guest" ? "Guest" : "System")}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">

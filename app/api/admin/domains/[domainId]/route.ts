@@ -4,6 +4,7 @@ import { NextResponse } from "next/server"
 import { isAdminRequest } from "@/lib/admin-session"
 import { connectDB } from "@/lib/db"
 import { isValidDomain, normalizeDomain } from "@/lib/domain-validation"
+import { resolveDomainSource } from "@/lib/domain-source"
 import { Address } from "@/models/address.model"
 import { Domain } from "@/models/domain.model"
 
@@ -23,6 +24,7 @@ export async function PATCH(
   const body = (await req.json().catch(() => null)) as {
     name?: unknown
     type?: unknown
+    source?: unknown
     isVerified?: unknown
     visibility?: unknown
     privateUntil?: unknown
@@ -47,9 +49,26 @@ export async function PATCH(
     patch.name = name
   }
 
-  if (body?.type === "system" || body?.type === "custom") {
+  if (body?.source === "system" || body?.source === "guest") {
+    patch.source = body.source
+    patch.type = body.source === "system" ? "system" : "custom"
+    patch.userId = null
+    if (body.source === "system") {
+      patch.visibility = "public"
+      patch.privateUntil = null
+    }
+    if (body.source === "guest") {
+      patch.visibility = "public"
+      patch.privateUntil = null
+    }
+  } else if (body?.type === "system" || body?.type === "custom") {
     patch.type = body.type
-    if (body.type === "system") patch.userId = null
+    if (body.type === "system") {
+      patch.userId = null
+      patch.source = "system"
+      patch.visibility = "public"
+      patch.privateUntil = null
+    }
   }
 
   if (typeof body?.isVerified === "boolean") {
@@ -57,8 +76,16 @@ export async function PATCH(
   }
 
   if (body?.visibility === "public" || body?.visibility === "private") {
-    patch.visibility = body.visibility
-    if (body.visibility === "public") patch.privateUntil = null
+    const currentSource =
+      (patch.source as string | undefined) ?? resolveDomainSource(existingDomain)
+
+    if (currentSource === "system" || currentSource === "guest") {
+      patch.visibility = "public"
+      patch.privateUntil = null
+    } else {
+      patch.visibility = body.visibility
+      if (body.visibility === "public") patch.privateUntil = null
+    }
   }
 
   if (typeof body?.privateUntil === "string") {
@@ -85,6 +112,16 @@ export async function PATCH(
     existingDomain.visibility ??
     "public"
   const nextUserId = patch.userId ?? existingDomain.userId ?? null
+  const nextSource =
+    (patch.source as "system" | "user" | "guest" | undefined) ??
+    resolveDomainSource(existingDomain)
+
+  if (nextSource !== "user" && nextVisibility === "private") {
+    return NextResponse.json(
+      { error: "Only user-owned domains can be private" },
+      { status: 400 }
+    )
+  }
 
   if (nextVisibility === "private") {
     patch.type = "custom"
@@ -105,6 +142,7 @@ export async function PATCH(
     id: domain._id.toString(),
     name: domain.name,
     type: domain.type,
+    source: resolveDomainSource(domain),
     isVerified: domain.isVerified,
     visibility: domain.visibility ?? "public",
     privateUntil: domain.privateUntil,

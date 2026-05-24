@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server"
 
 import { isAdminRequest } from "@/lib/admin-session"
-import { connectDB } from "@/lib/db"
+import { connectDB, hasMongoConfig } from "@/lib/db"
 
 export const dynamic = "force-dynamic"
 
 export async function GET() {
   if (!(await isAdminRequest())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  if (!hasMongoConfig()) {
+    return NextResponse.json({
+      ok: false,
+      error: "MONGODB_URI tidak dikonfigurasi",
+    })
   }
 
   try {

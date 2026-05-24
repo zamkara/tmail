@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 
-const BASE = process.env.NEXT_PUBLIC_EMAIL_API_URL
+const BASE = process.env.NEXT_PUBLIC_EMAIL_API_URL?.trim() ?? ""
 export const dynamic = "force-dynamic"
 
 export async function GET(req: Request) {
@@ -10,8 +10,35 @@ export async function GET(req: Request) {
   if (!address)
     return NextResponse.json({ error: "address wajib diisi" }, { status: 400 })
 
+  if (!BASE) {
+    return NextResponse.json(
+      { messages: [] },
+      {
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      }
+    )
+  }
+
+  let target: URL
+  try {
+    target = new URL("/inbox", BASE)
+  } catch {
+    return NextResponse.json(
+      { messages: [] },
+      {
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      }
+    )
+  }
+
+  target.searchParams.set("email", address)
+
   const res = await fetch(
-    `${BASE}/inbox?email=${encodeURIComponent(address)}`,
+    target,
     {
       cache: "no-store",
     }
