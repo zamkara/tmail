@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server"
 import mongoose from "mongoose"
 
-import { getAdminSettings } from "@/lib/admin-settings"
+import {
+  DEFAULT_ADMIN_SETTINGS,
+  getAdminSettings,
+} from "@/lib/admin-settings"
 import { isAdminRequest } from "@/lib/admin-session"
-import { connectDB } from "@/lib/db"
+import { connectDB, hasMongoConfig } from "@/lib/db"
 import { Address } from "@/models/address.model"
 import { Domain } from "@/models/domain.model"
 import { User } from "@/models/user.model"
 import { Voucher } from "@/models/voucher.model"
+import { resolveDomainSource } from "@/lib/domain-source"
 
 export const dynamic = "force-dynamic"
 
@@ -15,6 +19,23 @@ export async function GET() {
   try {
     if (!(await isAdminRequest())) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    if (!hasMongoConfig()) {
+      return NextResponse.json({
+        stats: {
+          users: 0,
+          domains: 0,
+          addresses: 0,
+          activeAddresses: 0,
+          vouchers: 0,
+        },
+        users: [],
+        domains: [],
+        addresses: [],
+        vouchers: [],
+        settings: DEFAULT_ADMIN_SETTINGS,
+      })
     }
 
     await connectDB()
@@ -97,7 +118,7 @@ export async function GET() {
         : [],
       addressDomainIds.length
         ? Domain.find({ _id: { $in: addressDomainIds } })
-            .select("_id name type")
+            .select("_id name type source userId")
             .lean()
         : [],
     ])
@@ -118,6 +139,7 @@ export async function GET() {
           id: domain._id.toString(),
           name: domain.name,
           type: domain.type,
+          source: resolveDomainSource(domain),
         },
       ])
     )
@@ -148,6 +170,7 @@ export async function GET() {
           id: domain._id.toString(),
           name: domain.name,
           type: domain.type,
+          source: resolveDomainSource(domain),
           isVerified: domain.isVerified,
           visibility: domain.visibility ?? "public",
           privateUntil: domain.privateUntil,

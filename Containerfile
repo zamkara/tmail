@@ -2,7 +2,7 @@
 FROM alpine:edge AS base
 
 RUN apk add --no-cache nodejs npm
-RUN npm install -g npm@latest pnpm
+RUN npm install -g npm@latest pnpm@11.0.0
 
 # ---- prod deps ---------------------------------------------------------------
 FROM base AS prod-deps

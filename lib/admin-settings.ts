@@ -1,3 +1,4 @@
+import { hasMongoConfig } from "@/lib/db"
 import { AdminSettings } from "@/models/admin-settings.model"
 
 export interface AppAdminSettings {
@@ -17,6 +18,10 @@ export const DEFAULT_ADMIN_SETTINGS: AppAdminSettings = {
 }
 
 export async function getAdminSettings() {
+  if (!hasMongoConfig()) {
+    return DEFAULT_ADMIN_SETTINGS
+  }
+
   const settings = await AdminSettings.findOneAndUpdate(
     { key: "default" },
     { $setOnInsert: { key: "default", ...DEFAULT_ADMIN_SETTINGS } },

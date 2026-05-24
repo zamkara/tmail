@@ -17,6 +17,7 @@ import {
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
 import InboxCtaButton from "@/components/guest/inbox-cta-button"
+import { resolveDomainSource } from "@/lib/domain-source"
 import { generateAddress } from "@/services/address.service"
 import { getDomains } from "@/services/domain.service"
 import { useAddressStore } from "@/stores/address.store"
@@ -31,8 +32,11 @@ function isAddressAvailable(address: GeneratedAddress) {
 
 function sortDomains(domains: Domain[]) {
   return [...domains].sort((first, second) => {
-    if (first.type !== second.type) {
-      return first.type === "system" ? -1 : 1
+    const order = { system: 0, user: 1, guest: 2 } as const
+    const firstSource = resolveDomainSource(first)
+    const secondSource = resolveDomainSource(second)
+    if (firstSource !== secondSource) {
+      return order[firstSource] - order[secondSource]
     }
 
     return first.name.localeCompare(second.name)

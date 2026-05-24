@@ -111,6 +111,14 @@ function getMongoErrorMessage(error: unknown) {
   return message
 }
 
+export function getMongoUri() {
+  return process.env.MONGODB_URI_DIRECT ?? process.env.MONGODB_URI ?? ""
+}
+
+export function hasMongoConfig() {
+  return getMongoUri().trim().length > 0
+}
+
 async function resolveMongoUri(uri: string) {
   if (!uri.startsWith("mongodb+srv://")) return uri
   if (process.env.MONGODB_USE_SRV === "true") return uri
@@ -142,7 +150,7 @@ async function resolveMongoUri(uri: string) {
 }
 
 export async function connectDB() {
-  const MONGODB_URI = process.env.MONGODB_URI_DIRECT ?? process.env.MONGODB_URI
+  const MONGODB_URI = getMongoUri()
   if (!MONGODB_URI) throw new Error("MONGODB_URI tidak ditemukan di .env.local")
 
   configureMongoDns()

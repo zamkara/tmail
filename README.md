@@ -70,7 +70,9 @@ pnpm build
 Create `.env.local` when connecting a backend:
 
 ```env
+MONGODB_URI=mongodb+srv://...
 NEXT_PUBLIC_API_URL=http://localhost:3001
+NEXT_PUBLIC_EMAIL_API_URL=https://...
 ```
 
 ## shadcn/ui

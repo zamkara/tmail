@@ -5,6 +5,7 @@ import { NextResponse } from "next/server"
 import { getAuthUser } from "@/lib/auth"
 import { connectDB } from "@/lib/db"
 import { hasPrivateAccessWindow } from "@/lib/domain-access"
+import { resolveDomainSource } from "@/lib/domain-source"
 import {
   getMxVerificationError,
   isValidDomain,
@@ -100,6 +101,7 @@ export async function PATCH(
     id: domain._id.toString(),
     name: domain.name,
     type: domain.type,
+    source: resolveDomainSource(domain),
     isVerified: domain.isVerified,
     addedAt: domain.createdAt,
     visibility: domain.visibility ?? "public",

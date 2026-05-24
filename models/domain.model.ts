@@ -4,6 +4,12 @@ const domainSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, lowercase: true, trim: true },
     type: { type: String, enum: ["system", "custom"], required: true },
+    source: {
+      type: String,
+      enum: ["system", "user", "guest"],
+      required: false,
+      default: null,
+    },
     isVerified: { type: Boolean, default: false },
     visibility: {
       type: String,

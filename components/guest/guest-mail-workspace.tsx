@@ -12,7 +12,6 @@ import {
 import { toast } from "sonner"
 
 import CopyButton from "@/components/shared/copy-button"
-import DecryptedText from "@/components/shared/decrypted-text"
 import DomainAddressSwitcher from "@/components/guest/domain-address-switcher"
 import EmailOtpChip from "@/components/inbox/email-otp-chip"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -31,10 +30,12 @@ import { InputGroup, InputGroupAddon } from "@/components/ui/input-group"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Spinner } from "@/components/ui/spinner"
+import { isValidDomain, normalizeDomain } from "@/lib/domain-validation"
+import { resolveDomainSource } from "@/lib/domain-source"
 import { cn } from "@/lib/utils"
 import { formatRelativeInboxTime, parseInboxSender } from "@/lib/inbox"
 import { generateAddress } from "@/services/address.service"
-import { getDomains } from "@/services/domain.service"
+import { addDomain, getDomains, verifyDomain } from "@/services/domain.service"
 import { useAddressStore } from "@/stores/address.store"
 import { useAuthStore } from "@/stores/auth.store"
 import { useAuroraStore } from "@/stores/aurora.store"
@@ -146,6 +147,21 @@ function createGuestAddress(
 
 function getPublicDomains(domains: Domain[]) {
   return domains.filter((domain) => domain.visibility !== "private")
+}
+
+function findMatchingDomain(domainPart: string, domains: Domain[]) {
+  const normalizedPart = normalizeDomain(domainPart)
+  if (!normalizedPart) return null
+
+  return [...domains]
+    .sort((first, second) => second.name.length - first.name.length)
+    .find((domain) => {
+      const normalizedName = normalizeDomain(domain.name)
+      return (
+        normalizedPart === normalizedName ||
+        normalizedPart.endsWith(`.${normalizedName}`)
+      )
+    }) ?? null
 }
 
 async function fetchJsonWithTimeout<T>(url: string): Promise<T> {
@@ -278,6 +294,7 @@ export default function GuestMailWorkspace() {
       ) ?? null,
     [activeAddressId, addresses]
   )
+  const activeAddressEmail = activeAddress?.address ?? null
 
   useEffect(() => {
     if (!authLoaded) return
@@ -291,8 +308,11 @@ export default function GuestMailWorkspace() {
     }
 
     const firstAvailableDomain = [...publicDomains].sort((first, second) => {
-      if (first.type !== second.type) {
-        return first.type === "system" ? -1 : 1
+      const order = { system: 0, user: 1, guest: 2 } as const
+      const firstSource = resolveDomainSource(first)
+      const secondSource = resolveDomainSource(second)
+      if (firstSource !== secondSource) {
+        return order[firstSource] - order[secondSource]
       }
 
       return first.name.localeCompare(second.name)
@@ -381,6 +401,22 @@ export default function GuestMailWorkspace() {
 
     return () => window.clearInterval(interval)
   }, [activeAddress, loadEmails])
+
+  useEffect(() => {
+    function handleBackendUpdate(event: Event) {
+      const customEvent = event as CustomEvent<{
+        email?: string | null
+      }>
+      if (customEvent.detail.email && customEvent.detail.email !== activeAddressEmail) {
+        return
+      }
+      void loadEmails()
+    }
+
+    window.addEventListener("tmail:backend-inbox-update", handleBackendUpdate)
+    return () =>
+      window.removeEventListener("tmail:backend-inbox-update", handleBackendUpdate)
+  }, [activeAddressEmail, loadEmails])
 
   useEffect(() => {
     setExpandedEmailId(null)
@@ -511,35 +547,65 @@ export default function GuestMailWorkspace() {
   )
 
   const [editAddress, setEditAddress] = useState<string | null>(null)
-  const [editLocalValue, setEditLocalValue] = useState("")
-  const [editSubdomainValue, setEditSubdomainValue] = useState<string | null>(
-    null
-  )
-  const [editRootDomain, setEditRootDomain] = useState("")
+  const [editAddressValue, setEditAddressValue] = useState("")
+  const [isSavingAddressEdit, setIsSavingAddressEdit] = useState(false)
 
   function startAddressEdit() {
     if (!activeAddress) return
-    const domainEntry = domains.find((d) => d.id === activeAddress.domainId)
-    const rootDomain = domainEntry?.name ?? ""
-    const fullDomain = activeAddress.address.split("@")[1]
-    setEditLocalValue(activeAddress.address.split("@")[0])
-    if (fullDomain.endsWith(rootDomain) && fullDomain !== rootDomain) {
-      setEditSubdomainValue(fullDomain.slice(0, -rootDomain.length - 1))
-    } else {
-      setEditSubdomainValue("")
-    }
-    setEditRootDomain(rootDomain)
+    setEditAddressValue(activeAddress.address)
     setEditAddress(activeAddress.id)
   }
 
-  function saveAddressEdit() {
+  async function saveAddressEdit() {
     if (!activeAddress) return
-    const rebuilt =
-      editSubdomainValue !== null
-        ? `${editLocalValue}@${editSubdomainValue}.${editRootDomain}`
-        : `${editLocalValue}@${editRootDomain}`
-    updateAddress(activeAddress.id, { address: rebuilt })
-    setEditAddress(null)
+    if (isSavingAddressEdit) return
+
+    const trimmed = editAddressValue.trim()
+    const hasAtSymbol = trimmed.includes("@")
+    const atIndex = hasAtSymbol ? trimmed.lastIndexOf("@") : -1
+    const currentLocalPart = activeAddress.address.split("@")[0]?.trim() ?? ""
+    const localPart = hasAtSymbol
+      ? trimmed.slice(0, atIndex).trim()
+      : currentLocalPart
+    const domainPart = normalizeDomain(
+      hasAtSymbol ? trimmed.slice(atIndex + 1) : trimmed
+    )
+
+    if (!localPart || /\s/.test(localPart) || localPart.includes("@")) {
+      toast.error("Format address tidak valid")
+      return
+    }
+
+    if (!isValidDomain(domainPart)) {
+      toast.error("Domain tidak valid")
+      return
+    }
+
+    setIsSavingAddressEdit(true)
+
+    try {
+      let matchedDomain = findMatchingDomain(domainPart, domains)
+
+      if (!matchedDomain) {
+        await verifyDomain(domainPart)
+        matchedDomain = await addDomain(domainPart)
+        useDomainStore.getState().addDomain(matchedDomain)
+        toast.success("Domain added")
+      }
+
+      updateAddress(activeAddress.id, {
+        address: `${localPart}@${matchedDomain.name}`,
+        domainId: matchedDomain.id,
+        domainName: matchedDomain.name,
+      })
+      setEditAddress(null)
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Gagal menyimpan address"
+      )
+    } finally {
+      setIsSavingAddressEdit(false)
+    }
   }
 
   const [useSubdomain, setUseSubdomain] = useState(true)
@@ -553,56 +619,28 @@ export default function GuestMailWorkspace() {
           <>
             <div className="flex items-center gap-2 rounded-lg border bg-muted py-2 ps-4 pe-2">
               {editAddress ? (
-                <div
-                  className="flex min-w-0 flex-1 items-center gap-0 sm:text-lg"
-                  onBlur={(e) => {
-                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                      saveAddressEdit()
-                    }
-                  }}
-                >
+                <div className="flex min-w-0 flex-1 items-center gap-0 sm:text-lg">
                   <input
                     type="text"
-                    value={editLocalValue}
-                    onChange={(e) => setEditLocalValue(e.target.value)}
+                    value={editAddressValue}
+                    onChange={(e) => setEditAddressValue(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") saveAddressEdit()
+                      if (e.key === "Enter") void saveAddressEdit()
                       if (e.key === "Escape") setEditAddress(null)
                     }}
-                    className="max-w-[40%] min-w-0 bg-transparent outline-hidden"
+                    onBlur={() => void saveAddressEdit()}
+                    className="min-w-0 flex-1 bg-transparent outline-hidden"
+                    placeholder="local@domain.com atau domain.com"
+                    disabled={isSavingAddressEdit}
                     autoFocus
                   />
-                  <span className="shrink-0 text-muted-foreground">@</span>
-                  <input
-                    type="text"
-                    value={editSubdomainValue ?? ""}
-                    onChange={(e) => setEditSubdomainValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") saveAddressEdit()
-                      if (e.key === "Escape") setEditAddress(null)
-                    }}
-                    className="max-w-[40%] min-w-0 bg-transparent outline-hidden"
-                  />
-                  <span className="shrink-0 text-muted-foreground">.</span>
-                  <span className="shrink-0 text-muted-foreground">
-                    {editRootDomain}
-                  </span>
                 </div>
               ) : (
                 <span
                   className="min-w-0 flex-1 cursor-text truncate sm:text-xl"
                   onClick={() => startAddressEdit()}
                 >
-                  <DecryptedText
-                    key={activeAddress.address}
-                    text={activeAddress.address}
-                    animateOn="view"
-                    speed={40}
-                    maxIterations={15}
-                    characters="abcdefghijklmnopqrstuvwxyz0123456789@."
-                    className=""
-                    encryptedClassName=""
-                  />
+                  {activeAddress.address}
                 </span>
               )}
               <Card className="rounded-md px-4 py-0 text-primary dark:text-foreground">

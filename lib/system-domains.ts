@@ -52,6 +52,7 @@ export async function syncSystemDomainsFromEmailApi() {
           $setOnInsert: {
             name,
             type: "system",
+            source: "system",
             isVerified: true,
             userId: null,
           },

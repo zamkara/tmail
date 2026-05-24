@@ -49,6 +49,7 @@ import { useDomainStore } from "@/stores/domain.store"
 import { useAuthStore } from "@/stores/auth.store"
 import { useInboxStore } from "@/stores/inbox.store"
 import { buildInboxHref } from "@/lib/inbox"
+import { resolveDomainSource } from "@/lib/domain-source"
 import { cn } from "@/lib/utils"
 import type { Domain } from "@/types"
 
@@ -120,8 +121,11 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
   }, [setDomains, user?.id])
 
   const sortedDomains = [...domains].sort((first, second) => {
-    if (first.type !== second.type) {
-      return first.type === "system" ? -1 : 1
+    const order = { system: 0, user: 1, guest: 2 } as const
+    const firstSource = resolveDomainSource(first)
+    const secondSource = resolveDomainSource(second)
+    if (firstSource !== secondSource) {
+      return order[firstSource] - order[secondSource]
     }
 
     return first.name.localeCompare(second.name)
@@ -154,20 +158,17 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
           {sortedDomains.map((domain) => {
             const Icon = domain.type === "system" ? GlobeIcon : Building2Icon
             const isLoading = loadingDomainId === domain.id
-            const canManageDomain = Boolean(
-              domain.isOwnedByUser ?? domain.type === "custom"
-            )
+            const source = resolveDomainSource(domain)
+            const canManageDomain = source === "user"
             const row = (
               <SidebarMenuButton
                 type="button"
                 size={compact ? "lg" : "default"}
                 className={cn(
                   compact && "h-auto py-2",
-                  !canManageDomain &&
-                    domain.type === "system" &&
-                    "cursor-default"
+                  !canManageDomain && "cursor-default"
                 )}
-                aria-disabled={!canManageDomain && domain.type === "system"}
+                aria-disabled={!canManageDomain}
               >
                 <div className="flex min-w-0 flex-1 items-center gap-2">
                   {compact ? (
@@ -187,7 +188,9 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
                       visibility={domain.visibility}
                       className="shrink-0"
                     />
-                    {!compact && <DomainBadge type={domain.type} />}
+                    {!compact && (
+                      <DomainBadge type={domain.type} source={source} />
+                    )}
                   </div>
                 </div>
               </SidebarMenuButton>

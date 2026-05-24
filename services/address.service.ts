@@ -1,4 +1,5 @@
 import type { GeneratedAddress } from "@/types"
+import { buildBackendUrl, fetchBackendJson } from "@/services/backend.service"
 import { useAddressStore } from "@/stores/address.store"
 
 // Untuk user login: ambil dari API (tersimpan di DB)
@@ -52,6 +53,31 @@ export function generateAddressLocally(domainId: string, domainName: string): Ge
   }
 }
 
+async function generateAddressViaBackend(
+  domainId: string,
+  domainName: string
+): Promise<GeneratedAddress> {
+  const target = buildBackendUrl(`/generate?domain=${encodeURIComponent(domainName)}`)
+  if (!target) {
+    return generateAddressLocally(domainId, domainName)
+  }
+
+  const data = await fetchBackendJson<{ email: string; domain: string }>(
+    target.pathname + target.search
+  )
+  const now = new Date()
+
+  return {
+    id: `local_${Date.now()}`,
+    address: data.email,
+    domainId,
+    domainName: data.domain || domainName,
+    username: null,
+    createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+  }
+}
+
 // Fungsi utama yang dipakai komponen — otomatis pilih mode
 export async function generateAddress(
   domainId: string,
@@ -59,5 +85,9 @@ export async function generateAddress(
   isLoggedIn = false
 ): Promise<GeneratedAddress> {
   if (isLoggedIn) return generateAddressForUser(domainId)
-  return generateAddressLocally(domainId, domainName)
+  try {
+    return await generateAddressViaBackend(domainId, domainName)
+  } catch {
+    return generateAddressLocally(domainId, domainName)
+  }
 }

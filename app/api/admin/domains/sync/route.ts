@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { isAdminRequest } from "@/lib/admin-session"
-import { connectDB } from "@/lib/db"
+import { connectDB, hasMongoConfig } from "@/lib/db"
 import { syncSystemDomainsFromEmailApi } from "@/lib/system-domains"
 import { Domain } from "@/models/domain.model"
 
@@ -10,7 +10,14 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  await connectDB()
+  if (hasMongoConfig()) {
+    await connectDB()
+  } else {
+    return NextResponse.json({
+      synced: [],
+      domains: [],
+    })
+  }
 
   const synced = await syncSystemDomainsFromEmailApi()
   const domains = await Domain.find({ type: "system" }).sort({ name: 1 }).lean()
