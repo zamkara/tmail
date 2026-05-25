@@ -1,6 +1,7 @@
 "use client"
 
 import { usePathname } from "next/navigation"
+import { toast } from "sonner"
 
 import {
   Breadcrumb,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/inbox"
 import { useAddressStore } from "@/stores/address.store"
 import type { GeneratedAddress } from "@/types"
+import { useCopy } from "@/hooks/use-copy"
 
 const folderLabels: Record<InboxFolder, string> = {
   inbox: "Inbox",
@@ -86,6 +88,7 @@ function getFallbackAddressLabel(rest: string[]) {
 
 export default function InboxBreadcrumb() {
   const pathname = usePathname()
+  const { copy } = useCopy()
   const addresses = useAddressStore((state) => state.addresses)
   const activeAddressId = useAddressStore((state) => state.activeAddressId)
   const parsed = getPathParts(pathname)
@@ -99,9 +102,20 @@ export default function InboxBreadcrumb() {
   const isEmailDetail = isEmailDetailPath(parsed.rest, activeAddress)
   const addressLabel =
     activeAddress?.address ?? getFallbackAddressLabel(parsed.rest)
+  const shouldShowAddress = Boolean(activeAddress || isEmailDetail)
   const folderHref = activeAddress
     ? buildInboxFolderHref(activeAddress, folder)
     : "/inbox"
+  const mailLabel = mailId ? decodeURIComponent(mailId) : null
+
+  async function handleCopyAddress() {
+    try {
+      await copy(addressLabel)
+      toast.success("Email address copied")
+    } catch {
+      toast.error("Failed to copy email address")
+    }
+  }
 
   return (
     <Breadcrumb className="min-w-0">
@@ -113,19 +127,33 @@ export default function InboxBreadcrumb() {
         <BreadcrumbItem>
           <BreadcrumbLink
             href={folderHref}
-            className={isEmailDetail ? undefined : "text-foreground"}
+            className={shouldShowAddress ? undefined : "text-foreground"}
           >
             {folderLabels[folder]}
           </BreadcrumbLink>
         </BreadcrumbItem>
-        {isEmailDetail ? (
+        {shouldShowAddress ? (
           <>
             <BreadcrumbSeparator />
             <BreadcrumbItem className="min-w-0">
-              <BreadcrumbPage className="block max-w-[48vw] truncate md:max-w-[36vw]">
+              <button
+                type="button"
+                className="block max-w-[38vw] truncate text-left text-foreground hover:underline md:max-w-[28vw]"
+                onClick={() => void handleCopyAddress()}
+              >
                 {addressLabel}
-              </BreadcrumbPage>
+              </button>
             </BreadcrumbItem>
+            {mailLabel ? (
+              <>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem className="min-w-0">
+                  <BreadcrumbPage className="block max-w-[28vw] truncate md:max-w-[24vw]">
+                    {mailLabel}
+                  </BreadcrumbPage>
+                </BreadcrumbItem>
+              </>
+            ) : null}
           </>
         ) : null}
       </BreadcrumbList>

@@ -10,11 +10,14 @@ export async function getAddresses(): Promise<GeneratedAddress[]> {
 }
 
 // Untuk user login: generate via API (tersimpan di DB)
-export async function generateAddressForUser(domainId: string): Promise<GeneratedAddress> {
+export async function generateAddressForUser(
+  domainId: string,
+  subdomain = ""
+): Promise<GeneratedAddress> {
   const res = await fetch("/api/addresses", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ domainId }),
+    body: JSON.stringify({ domainId, subdomain }),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error ?? "Failed to create address")
@@ -85,11 +88,13 @@ export function generateAddressLocally(domainId: string, domainName: string): Ge
 
 async function generateAddressViaBackend(
   domainId: string,
-  domainName: string
+  domainName: string,
+  subdomain = ""
 ): Promise<GeneratedAddress> {
-  const target = buildBackendUrl(`/generate?domain=${encodeURIComponent(domainName)}`)
+  const resolvedDomain = subdomain ? `${subdomain}.${domainName}` : domainName
+  const target = buildBackendUrl(`/generate?domain=${encodeURIComponent(resolvedDomain)}`)
   if (!target) {
-    return generateAddressLocally(domainId, domainName)
+    return generateAddressLocally(domainId, resolvedDomain)
   }
 
   const data = await fetchBackendJson<{ email: string; domain: string }>(
@@ -112,12 +117,14 @@ async function generateAddressViaBackend(
 export async function generateAddress(
   domainId: string,
   domainName: string,
-  isLoggedIn = false
+  isLoggedIn = false,
+  subdomain = ""
 ): Promise<GeneratedAddress> {
-  if (isLoggedIn) return generateAddressForUser(domainId)
+  if (isLoggedIn) return generateAddressForUser(domainId, subdomain)
   try {
-    return await generateAddressViaBackend(domainId, domainName)
+    return await generateAddressViaBackend(domainId, domainName, subdomain)
   } catch {
-    return generateAddressLocally(domainId, domainName)
+    const resolvedDomain = subdomain ? `${subdomain}.${domainName}` : domainName
+    return generateAddressLocally(domainId, resolvedDomain)
   }
 }

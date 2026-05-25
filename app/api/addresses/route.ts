@@ -13,6 +13,18 @@ import {
   isRateLimitError,
 } from "@/lib/rate-limit"
 
+function normalizeSubdomain(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : ""
+}
+
+function isValidSubdomain(value: string) {
+  if (!value) return true
+
+  return value
+    .split(".")
+    .every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))
+}
+
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -76,12 +88,23 @@ export async function POST(req: Request) {
     if (!auth)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { domainId } = await req.json()
+    const body = (await req.json().catch(() => null)) as {
+      domainId?: unknown
+      subdomain?: unknown
+    } | null
+    const domainId = typeof body?.domainId === "string" ? body.domainId : ""
+    const subdomain = normalizeSubdomain(body?.subdomain)
     if (!domainId)
       return NextResponse.json(
         { error: "domainId wajib diisi" },
         { status: 400 }
       )
+    if (!isValidSubdomain(subdomain)) {
+      return NextResponse.json(
+        { error: "Format subdomain tidak valid" },
+        { status: 400 }
+      )
+    }
 
     await connectDB()
     const settings = await getAdminSettings()
@@ -93,6 +116,12 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "Domain tidak tersedia" },
         { status: 404 }
+      )
+    }
+    if (subdomain && settings.allowWildcardSubdomains === false) {
+      return NextResponse.json(
+        { error: "Wildcard subdomains are disabled" },
+        { status: 403 }
       )
     }
 
@@ -114,6 +143,9 @@ export async function POST(req: Request) {
       { length: 6 },
       () => chars[Math.floor(Math.random() * chars.length)]
     ).join("")
+    const resolvedDomainName = subdomain
+      ? `${subdomain}.${domain.name}`
+      : domain.name
 
     await Address.updateMany(
       {
@@ -150,7 +182,7 @@ export async function POST(req: Request) {
     )
 
     const address = await Address.create({
-      address: `${random}@${domain.name}`,
+      address: `${random}@${resolvedDomainName}`,
       domainId: domain._id,
       userId: auth.userId,
       expiresAt,
@@ -166,7 +198,7 @@ export async function POST(req: Request) {
         id: address._id.toString(),
         address: address.address,
         domainId: address.domainId.toString(),
-        domainName: domain.name,
+        domainName: resolvedDomainName,
         username,
         createdAt: address.createdAt,
         expiresAt: address.expiresAt,

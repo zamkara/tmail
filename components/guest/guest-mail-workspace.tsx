@@ -20,6 +20,14 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
   Empty,
   EmptyDescription,
   EmptyHeader,
@@ -38,7 +46,7 @@ import { cn } from "@/lib/utils"
 import { formatRelativeInboxTime, parseInboxSender } from "@/lib/inbox"
 import { generateAddress } from "@/services/address.service"
 import type { BackendDomainStatus } from "@/services/backend.service"
-import { addDomain, getDomains, verifyDomain } from "@/services/domain.service"
+import { getDomains } from "@/services/domain.service"
 import { useAddressStore } from "@/stores/address.store"
 import { useAuthStore } from "@/stores/auth.store"
 import { useAuroraStore } from "@/stores/aurora.store"
@@ -230,6 +238,7 @@ export default function GuestMailWorkspace() {
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isDeletingMessages, setIsDeletingMessages] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [isLoadingDomains, setIsLoadingDomains] = useState(false)
   const [appSettings, setAppSettings] = useState<PublicAppSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -325,6 +334,13 @@ export default function GuestMailWorkspace() {
   const activeAddressDomain = activeAddressEmail
     ? getAddressDomain(activeAddressEmail)
     : ""
+  const activeDomainUnavailable = Boolean(
+    !isLoadingDomains &&
+      activeAddressDomain &&
+      !findMatchingDomain(activeAddressDomain, publicDomains)
+  )
+  const privateDomainMessage =
+    "This domain is private. Please contact the domain owner to request access."
   const inboxRefreshMs = useMemo(() => {
     if (isBackendWebSocketConnected) return WEBSOCKET_CONNECTED_REFRESH_MS
 
@@ -440,6 +456,13 @@ export default function GuestMailWorkspace() {
       setError(null)
       return
     }
+    if (activeDomainUnavailable) {
+      setEmails([])
+      setExpandedEmailId(null)
+      setEmailDetails({})
+      setError(privateDomainMessage)
+      return
+    }
 
     setIsLoading(true)
     setError(null)
@@ -464,15 +487,10 @@ export default function GuestMailWorkspace() {
     } finally {
       setIsLoading(false)
     }
-  }, [activeAddress, readIds])
+  }, [activeAddress, activeDomainUnavailable, privateDomainMessage, readIds])
 
   async function handleDeleteAllMessages() {
     if (!activeAddress || isDeletingMessages) return
-
-    const confirmed = window.confirm(
-      `Delete all messages for ${activeAddress.address}?`
-    )
-    if (!confirmed) return
 
     setIsDeletingMessages(true)
 
@@ -487,6 +505,7 @@ export default function GuestMailWorkspace() {
       setExpandedEmailId(null)
       setEmailDetails({})
       setError(null)
+      setDeleteConfirmOpen(false)
       toast.success(`Deleted ${data.messages_deleted ?? 0} messages`)
     } catch (error) {
       toast.error(
@@ -500,7 +519,7 @@ export default function GuestMailWorkspace() {
   useEffect(() => {
     void loadEmails()
 
-    if (!activeAddress) {
+    if (!activeAddress || activeDomainUnavailable) {
       setIsBackendWebSocketConnected(false)
       return
     }
@@ -512,7 +531,7 @@ export default function GuestMailWorkspace() {
     }, inboxRefreshMs)
 
     return () => window.clearInterval(interval)
-  }, [activeAddress, inboxRefreshMs, loadEmails])
+  }, [activeAddress, activeDomainUnavailable, inboxRefreshMs, loadEmails])
 
   useEffect(() => {
     function handleBackendUpdate(event: Event) {
@@ -686,6 +705,14 @@ export default function GuestMailWorkspace() {
     setEditAddress(activeAddress.id)
   }
 
+  function rejectAddressEdit(message: string) {
+    if (activeAddress) {
+      setEditAddressValue(activeAddress.address)
+    }
+    setEditAddress(null)
+    toast.error(message)
+  }
+
   async function saveAddressEdit() {
     if (!activeAddress) return
     if (isSavingAddressEdit) return
@@ -702,29 +729,29 @@ export default function GuestMailWorkspace() {
     )
 
     if (!localPart || /\s/.test(localPart) || localPart.includes("@")) {
-      toast.error("Format address tidak valid")
+      rejectAddressEdit("Invalid email address format")
       return
     }
 
     if (!isValidDomain(domainPart)) {
-      toast.error("Domain tidak valid")
+      rejectAddressEdit("Invalid domain")
       return
     }
 
     setIsSavingAddressEdit(true)
 
     try {
-      let matchedDomain = findMatchingDomain(domainPart, domains)
+      const matchedDomain = findMatchingDomain(domainPart, publicDomains)
 
       if (!matchedDomain) {
-        await verifyDomain(domainPart)
-        matchedDomain = await addDomain(domainPart)
-        useDomainStore.getState().addDomain(matchedDomain)
-        toast.success("Domain added")
+        rejectAddressEdit(
+          "This domain is private or unavailable. Please contact the domain owner to request access."
+        )
+        return
       }
 
       updateAddress(activeAddress.id, {
-        address: `${localPart}@${matchedDomain.name}`,
+        address: `${localPart}@${domainPart}`,
         domainId: matchedDomain.id,
         domainName: matchedDomain.name,
       })
@@ -805,12 +832,16 @@ export default function GuestMailWorkspace() {
                 New Address
               </Button>
             </div>
-            <DomainStatusSummary
-              domain={activeAddressDomain}
-              status={domainStatus}
-              error={domainStatusError}
-              isLoading={isLoadingDomainStatus}
-            />
+            {activeDomainUnavailable ? (
+              <PrivateDomainNotice message={privateDomainMessage} />
+            ) : (
+              <DomainStatusSummary
+                domain={activeAddressDomain}
+                status={domainStatus}
+                error={domainStatusError}
+                isLoading={isLoadingDomainStatus}
+              />
+            )}
           </>
         ) : (
           <p className="py-2 text-center text-sm text-muted-foreground">
@@ -834,7 +865,7 @@ export default function GuestMailWorkspace() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={!activeAddress}
+                  disabled={!activeAddress || activeDomainUnavailable}
                 />
                 <InputGroupAddon align="inline-end">
                   {searchQuery ? (
@@ -858,7 +889,12 @@ export default function GuestMailWorkspace() {
               variant="ghost"
               size="icon-sm"
               aria-label="Refresh inbox"
-              disabled={!activeAddress || isLoading || isDeletingMessages}
+              disabled={
+                !activeAddress ||
+                activeDomainUnavailable ||
+                isLoading ||
+                isDeletingMessages
+              }
               onClick={() => void loadEmails()}
             >
               {isLoading ? <Spinner /> : <RefreshCwIcon />}
@@ -870,11 +906,12 @@ export default function GuestMailWorkspace() {
               aria-label="Delete all messages"
               disabled={
                 !activeAddress ||
+                activeDomainUnavailable ||
                 emails.length === 0 ||
                 isLoading ||
                 isDeletingMessages
               }
-              onClick={() => void handleDeleteAllMessages()}
+              onClick={() => setDeleteConfirmOpen(true)}
               className="gap-2"
             >
               {isDeletingMessages ? (
@@ -884,6 +921,40 @@ export default function GuestMailWorkspace() {
               )}
               <span className="hidden sm:inline">Delete All Message</span>
             </Button>
+            <Dialog
+              open={deleteConfirmOpen}
+              onOpenChange={setDeleteConfirmOpen}
+            >
+              <DialogContent className="sm:max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Delete all messages?</DialogTitle>
+                  <DialogDescription>
+                    This will delete all messages for {activeAddress?.address}.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isDeletingMessages}
+                    onClick={() => setDeleteConfirmOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={isDeletingMessages}
+                    onClick={() => void handleDeleteAllMessages()}
+                  >
+                    {isDeletingMessages ? (
+                      <Spinner className="size-4" />
+                    ) : null}
+                    Delete messages
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </CardHeader>
         <CardContent className="min-h-0 flex-1 px-0">
@@ -908,7 +979,11 @@ export default function GuestMailWorkspace() {
                 <EmptyMedia variant="icon">
                   <InboxIcon />
                 </EmptyMedia>
-                <EmptyTitle>Inbox unavailable</EmptyTitle>
+                <EmptyTitle>
+                  {activeDomainUnavailable
+                    ? "Private domain"
+                    : "Inbox unavailable"}
+                </EmptyTitle>
                 <EmptyDescription>{error}</EmptyDescription>
               </EmptyHeader>
             </Empty>
@@ -1031,6 +1106,15 @@ function DomainStatusSummary({
         {status.mx_valid ? "MX valid" : "MX invalid"}
       </Badge>
       <span className="text-muted-foreground">Uptime {uptime}</span>
+    </div>
+  )
+}
+
+function PrivateDomainNotice({ message }: { message: string }) {
+  return (
+    <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm">
+      <div className="font-medium text-destructive">Private domain</div>
+      <div className="text-muted-foreground">{message}</div>
     </div>
   )
 }
