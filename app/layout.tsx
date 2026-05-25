@@ -1,4 +1,4 @@
-import { Geist_Mono, Google_Sans_Flex } from "next/font/google"
+import { Geist, Geist_Mono } from "next/font/google"
 
 import "./globals.css"
 import AdminSessionDialog from "@/components/admin/admin-session-dialog"
@@ -10,12 +10,9 @@ import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
-const googleSansFlex = Google_Sans_Flex({
+const fontSans = Geist({
   subsets: ["latin"],
   variable: "--font-sans",
-  weight: "variable",
-  axes: ["slnt", "wdth", "GRAD", "ROND"],
-  adjustFontFallback: false,
 })
 
 const fontMono = Geist_Mono({
@@ -36,7 +33,7 @@ export default function RootLayout({
         "antialiased",
         fontMono.variable,
         "font-sans",
-        googleSansFlex.variable
+        fontSans.variable
       )}
     >
       <body>

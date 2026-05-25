@@ -14,7 +14,7 @@ export const DEFAULT_ADMIN_SETTINGS: AppAdminSettings = {
   addressTtlHours: 24,
   allowGuestAddresses: true,
   allowWildcardSubdomains: true,
-  inboxRefreshSeconds: 15,
+  inboxRefreshSeconds: 30,
 }
 
 export async function getAdminSettings() {
@@ -67,7 +67,7 @@ export function normalizeAdminSettingsPatch(value: unknown) {
   if (typeof input.inboxRefreshSeconds === "number") {
     patch.inboxRefreshSeconds = Math.min(
       300,
-      Math.max(5, Math.floor(input.inboxRefreshSeconds))
+      Math.max(30, Math.floor(input.inboxRefreshSeconds))
     )
   }
 

@@ -13,6 +13,14 @@ type BackendInboxUpdateDetail = {
   }
 }
 
+function dispatchWebSocketStatus(email: string | null, connected: boolean) {
+  window.dispatchEvent(
+    new CustomEvent("tmail:backend-ws-status", {
+      detail: { email, connected },
+    })
+  )
+}
+
 export default function BackendInboxSync() {
   const activeAddress = useAddressStore((state) =>
     state.addresses.find((address) => address.id === state.activeAddressId)
@@ -35,15 +43,29 @@ export default function BackendInboxSync() {
 
   useEffect(() => {
     if (!websocketUrl || !getBackendBaseUrl()) {
+      dispatchWebSocketStatus(activeAddress?.address ?? null, false)
       return
     }
 
     let cancelled = false
+    const email = activeAddress?.address ?? null
 
     try {
       socketRef.current?.close()
       const socket = new WebSocket(websocketUrl)
       socketRef.current = socket
+
+      socket.addEventListener("open", () => {
+        if (!cancelled) dispatchWebSocketStatus(email, true)
+      })
+
+      socket.addEventListener("close", () => {
+        if (!cancelled) dispatchWebSocketStatus(email, false)
+      })
+
+      socket.addEventListener("error", () => {
+        if (!cancelled) dispatchWebSocketStatus(email, false)
+      })
 
       socket.addEventListener("message", (event) => {
         if (cancelled) return
@@ -66,10 +88,12 @@ export default function BackendInboxSync() {
       })
     } catch {
       // Keep polling as the fallback if the websocket cannot connect.
+      dispatchWebSocketStatus(email, false)
     }
 
     return () => {
       cancelled = true
+      dispatchWebSocketStatus(email, false)
       socketRef.current?.close()
       socketRef.current = null
     }

@@ -7,7 +7,7 @@ const adminSettingsSchema = new mongoose.Schema(
     addressTtlHours: { type: Number, required: true, default: 24 },
     allowGuestAddresses: { type: Boolean, required: true, default: true },
     allowWildcardSubdomains: { type: Boolean, required: true, default: true },
-    inboxRefreshSeconds: { type: Number, required: true, default: 15 },
+    inboxRefreshSeconds: { type: Number, required: true, default: 30 },
   },
   { timestamps: true }
 )

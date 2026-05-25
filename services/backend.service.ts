@@ -4,6 +4,7 @@ import type {
 } from "@/types"
 
 const BACKEND_API_BASE = process.env.NEXT_PUBLIC_EMAIL_API_URL?.trim() ?? ""
+const BACKEND_WS_BASE = process.env.NEXT_PUBLIC_EMAIL_WS_URL?.trim() ?? ""
 
 export interface BackendHealth {
   ok: boolean
@@ -172,19 +173,39 @@ export function buildBackendUrl(path: string) {
   if (!BACKEND_API_BASE) return null
 
   try {
-    return new URL(path, BACKEND_API_BASE)
+    const base = BACKEND_API_BASE.endsWith("/")
+      ? BACKEND_API_BASE
+      : `${BACKEND_API_BASE}/`
+    const relativePath = path.replace(/^\/+/, "")
+
+    return new URL(relativePath, base)
   } catch {
     return null
   }
 }
 
 export function buildBackendWsUrl(path = "/ws") {
-  const base = buildBackendUrl(path)
-  if (!base) return null
+  const source = BACKEND_WS_BASE || BACKEND_API_BASE
+  if (!source) return null
 
-  const url = new URL(base.toString())
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
-  return url.toString()
+  try {
+    const base = new URL(source)
+    const explicitWsBase = Boolean(BACKEND_WS_BASE)
+
+    if (!explicitWsBase) {
+      base.pathname = "/"
+    } else if (!base.pathname.endsWith("/")) {
+      base.pathname = `${base.pathname}/`
+    }
+
+    const relativePath = path.replace(/^\/+/, "")
+    const url = new URL(relativePath, base)
+
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
+    return url.toString()
+  } catch {
+    return null
+  }
 }
 
 export async function fetchBackendJson<T>(
@@ -213,6 +234,13 @@ export async function fetchBackendJson<T>(
   }
 
   return data
+}
+
+export function getBackendDomainStatus(domain: string) {
+  const query = new URLSearchParams({ domain })
+  return fetchBackendJson<BackendDomainStatus>(
+    `/domains/status?${query.toString()}`
+  )
 }
 
 export function isDomainSource(value: unknown): value is DomainSource {
