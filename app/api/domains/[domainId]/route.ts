@@ -16,6 +16,7 @@ import {
   normalizeDnsHost,
   normalizeDomain,
 } from "@/lib/domain-validation"
+import { Address } from "@/models/address.model"
 import { Domain } from "@/models/domain.model"
 import { User } from "@/models/user.model"
 
@@ -169,6 +170,11 @@ export async function DELETE(
       { status: 404 }
     )
   }
+
+  await Address.deleteMany({
+    domainId: domain._id,
+    userId: auth.userId,
+  })
 
   return NextResponse.json({ ok: true })
 }

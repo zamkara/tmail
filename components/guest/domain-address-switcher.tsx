@@ -165,7 +165,9 @@ export default function DomainAddressSwitcher({
       sortedDomains[Math.floor(Math.random() * sortedDomains.length)]
 
     if (!randomDomain) {
-      toast.error("No domains available")
+      toast.error(
+        "No public domains are available. Private domains require owner access."
+      )
       return
     }
 
@@ -265,7 +267,8 @@ export default function DomainAddressSwitcher({
               </div>
             ) : sortedDomains.length === 0 ? (
               <CommandEmpty>
-                No domains available. Check server connection.
+                No public domains are available. Private domains require owner
+                access.
               </CommandEmpty>
             ) : (
               <>

@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-inbox-realtime-domain-status-cleanup"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-user-inbox-address-domain-controls"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,25 +28,28 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-feat: major update for user, billing, and temporary email API key system
+feat: improve user inbox, address generation, and domain controls
 
 Main changes:
-- refactor user management flow with major structural improvements and cleanup
-- improve billing system logic, validation, and transaction handling
-- redesign temporary email API key system for better security and maintainability
-- optimize backend service communication and API integration
-- fix multiple bugs across user, billing, and temporary email modules
-- improve error handling and response consistency across APIs
-- cleanup unused logic and enhance overall application stability
+- align user inbox realtime behavior with guest inbox using websocket events and slower fallback polling
+- add delete-all message confirmation dialogs for desktop, mobile, and guest inbox flows
+- add OTP detection/copy action to user inbox message lists
+- add active-email breadcrumb copy support and message-id breadcrumb detail
+- add active address custom edit, delete, domain validity status, and same-domain generation actions
+- add manual domain picker and random-domain address generation from the active-address sidebar
+- add wildcard/subdomain address generation support for user-owned domains
+- add private-domain guest blocking so private domains cannot be opened from public guest flow
+- allow deleting user-owned domains and cleanup related active addresses
+- improve guest custom-email validation so invalid/private domains do not replace the current inbox
 
 Testing:
 - [x] `pnpm typecheck`
-- [ ] User registration and login flow
-- [ ] Billing transaction creation and validation
-- [ ] Temporary email API key generation and usage
-- [ ] API authentication and permission handling
-- [ ] Frontend and backend integration
-- [ ] General regression testing
+- [ ] User inbox websocket update and fallback polling
+- [ ] Delete all messages on desktop, mobile, and guest inbox
+- [ ] OTP copy button on user inbox list
+- [ ] Active address create, random create, edit, delete, and same-domain generate
+- [ ] User domain private/public toggle, wildcard generate, and delete
+- [ ] Guest private-domain access rejection
 EOF
 )
 

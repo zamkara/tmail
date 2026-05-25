@@ -1,7 +1,13 @@
 "use client"
 
 import { type ReactNode, useEffect, useState } from "react"
-import { Building2Icon, GlobeIcon, RefreshCwIcon } from "lucide-react"
+import {
+  Building2Icon,
+  GlobeIcon,
+  SparklesIcon,
+  RefreshCwIcon,
+  Trash2Icon,
+} from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
@@ -14,6 +20,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -36,6 +43,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { generateAddress } from "@/services/address.service"
 import {
+  deleteDomain,
   getDomains,
   setDomainVisibility,
 } from "@/services/domain.service"
@@ -81,6 +89,15 @@ function hasPrivateAccessWindow(domain: Domain) {
   return !Number.isNaN(time) && time > Date.now()
 }
 
+function randomSubdomainLabel() {
+  const chars = "abcdefghijklmnopqrstuvwxyz"
+
+  return Array.from(
+    { length: 4 },
+    () => chars[Math.floor(Math.random() * chars.length)]
+  ).join("")
+}
+
 function isPremiumActive(user: ReturnType<typeof useAuthStore.getState>["user"]) {
   return Boolean(
     user?.isPremium &&
@@ -94,9 +111,14 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
   const setDomains = useDomainStore((state) => state.setDomains)
   const updateDomain = useDomainStore((state) => state.updateDomain)
   const removeDomain = useDomainStore((state) => state.removeDomain)
+  const addresses = useAddressStore((state) => state.addresses)
+  const setAddresses = useAddressStore((state) => state.setAddresses)
   const addAddress = useAddressStore((state) => state.addAddress)
   const setActiveAddress = useAddressStore((state) => state.setActiveAddress)
+  const activeAddressId = useAddressStore((state) => state.activeAddressId)
   const [loadingDomainId, setLoadingDomainId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Domain | null>(null)
+  const [isDeletingDomain, setIsDeletingDomain] = useState(false)
   const router = useRouter()
   const user = useAuthStore((s) => s.user)
   const resetInbox = useInboxStore((s) => s.resetInbox)
@@ -135,22 +157,71 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
     return first.name.localeCompare(second.name)
   })
 
-  async function handleGenerateAddress(domainId: string, domainName: string) {
+  async function handleGenerateAddress(
+    domainId: string,
+    domainName: string,
+    withSubdomain = false
+  ) {
     setLoadingDomainId(domainId)
 
     try {
-      const address = await generateAddress(domainId, domainName, !!user)
+      const subdomain = withSubdomain ? randomSubdomainLabel() : ""
+      const address = await generateAddress(
+        domainId,
+        domainName,
+        !!user,
+        subdomain
+      )
       resetInbox()
       addAddress(address)
       setActiveAddress(address.id)
       router.push(buildInboxHref(address))
-      toast.success("Email address created")
+      toast.success(
+        withSubdomain ? "Wildcard email address created" : "Email address created"
+      )
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to create email address"
       )
     } finally {
       setLoadingDomainId(null)
+    }
+  }
+
+  async function handleDeleteDomain() {
+    if (!deleteTarget) return
+
+    setIsDeletingDomain(true)
+
+    try {
+      await deleteDomain(deleteTarget.id)
+
+      const remainingAddresses = addresses.filter(
+        (address) => address.domainId !== deleteTarget.id
+      )
+      const removedActiveAddress = addresses.some(
+        (address) =>
+          address.domainId === deleteTarget.id && address.id === activeAddressId
+      )
+
+      removeDomain(deleteTarget.id)
+      setAddresses(remainingAddresses)
+
+      if (removedActiveAddress) {
+        resetInbox()
+        const nextAddress = remainingAddresses[0] ?? null
+        setActiveAddress(nextAddress?.id ?? null)
+        router.push(nextAddress ? buildInboxHref(nextAddress) : "/inbox")
+      }
+
+      setDeleteTarget(null)
+      toast.success("Domain deleted")
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete domain"
+      )
+    } finally {
+      setIsDeletingDomain(false)
     }
   }
 
@@ -175,6 +246,7 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
                 size={compact ? "lg" : "default"}
                 className={cn(
                   compact && "h-auto py-2",
+                  canManageDomain && "pr-19!",
                   !canManageDomain && "cursor-default"
                 )}
                 aria-disabled={!canManageDomain}
@@ -217,6 +289,7 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
                 <SidebarMenuAction
                   type="button"
                   aria-label={`Generate address from ${domain.name}`}
+                  className={canManageDomain ? "right-14" : undefined}
                   disabled={isLoading}
                   onClick={() =>
                     void handleGenerateAddress(domain.id, domain.name)
@@ -224,6 +297,30 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
                 >
                   {isLoading ? <Spinner /> : <RefreshCwIcon />}
                 </SidebarMenuAction>
+                {canManageDomain ? (
+                  <>
+                    <SidebarMenuAction
+                      type="button"
+                      aria-label={`Generate wildcard address from ${domain.name}`}
+                      className="right-8"
+                      disabled={isLoading}
+                      onClick={() =>
+                        void handleGenerateAddress(domain.id, domain.name, true)
+                      }
+                    >
+                      {isLoading ? <Spinner /> : <SparklesIcon />}
+                    </SidebarMenuAction>
+                    <SidebarMenuAction
+                      type="button"
+                      aria-label={`Delete ${domain.name}`}
+                      className="right-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      disabled={isDeletingDomain}
+                      onClick={() => setDeleteTarget(domain)}
+                    >
+                      <Trash2Icon />
+                    </SidebarMenuAction>
+                  </>
+                ) : null}
               </SidebarMenuItem>
             )
           })}
@@ -231,6 +328,41 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
         <div className="mt-2">
           <AddDomainDialog />
         </div>
+        <Dialog
+          open={Boolean(deleteTarget)}
+          onOpenChange={(open) => {
+            if (!open) setDeleteTarget(null)
+          }}
+        >
+          <DialogContent className="p-0 sm:max-w-sm">
+            <DialogHeader className="px-4 pt-4">
+              <DialogTitle>Delete domain?</DialogTitle>
+              <DialogDescription>
+                {deleteTarget?.name} and its active email addresses will be
+                removed.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 px-4 pb-4 sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isDeletingDomain}
+                onClick={() => setDeleteTarget(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={isDeletingDomain}
+                onClick={() => void handleDeleteDomain()}
+              >
+                {isDeletingDomain ? <Spinner /> : null}
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </SidebarGroupContent>
     </SidebarGroup>
   )

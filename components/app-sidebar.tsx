@@ -8,13 +8,21 @@ import {
   TerminalIcon,
   Trash2Icon,
 } from "lucide-react"
-import Link from "next/link"
 import { useParams, usePathname, useRouter } from "next/navigation"
 import { toast } from "sonner"
 
-import { NavUser } from "@/components/nav-user"
 import EmailContextMenu from "@/components/inbox/email-context-menu"
+import EmailOtpChip from "@/components/inbox/email-otp-chip"
+import { NavUser } from "@/components/nav-user"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import {
   Sidebar,
@@ -61,6 +69,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [search, setSearch] = React.useState("")
   const [isRefreshing, setIsRefreshing] = React.useState(false)
   const [isAutoRefreshing, setIsAutoRefreshing] = React.useState(false)
+  const [isDeletingMessages, setIsDeletingMessages] = React.useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false)
   const [isBackendWebSocketConnected, setIsBackendWebSocketConnected] =
     React.useState(false)
   const params = useParams<{ slug?: string[] }>()
@@ -145,7 +155,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       return
     }
 
-    void refreshActiveAddress()
+    if (document.visibilityState === "visible" && navigator.onLine) {
+      void refreshActiveAddress()
+    }
 
     const pollInterval = isBackendWebSocketConnected
       ? INBOX_WEBSOCKET_POLL_INTERVAL_MS
@@ -214,6 +226,38 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     setIsRefreshing(true)
     await fetchEmails(activeAddress.address, activeAddress)
     setIsRefreshing(false)
+  }
+
+  async function handleDeleteAllMessages() {
+    if (!activeAddress || isDeletingMessages) return
+
+    setIsDeletingMessages(true)
+
+    try {
+      const res = await fetch(
+        `/api/inbox?address=${encodeURIComponent(activeAddress.address)}`,
+        { method: "DELETE", cache: "no-store" }
+      )
+      const data = (await res.json().catch(() => null)) as {
+        error?: string
+        messages_deleted?: number
+      } | null
+
+      if (!res.ok) {
+        throw new Error(data?.error ?? "Failed to delete messages")
+      }
+
+      emailsRef.current = []
+      setEmails([])
+      setDeleteConfirmOpen(false)
+      toast.success(`Deleted ${data?.messages_deleted ?? 0} messages`)
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete messages"
+      )
+    } finally {
+      setIsDeletingMessages(false)
+    }
   }
 
   const filtered = emails.filter((e) => {
@@ -330,11 +374,59 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               size="icon-sm"
               aria-label="Refresh inbox"
               onClick={() => void handleRefresh()}
-              disabled={isRefreshing}
+              disabled={isRefreshing || isDeletingMessages}
             >
               <RefreshCwIcon className={isRefreshing || isAutoRefreshing ? "animate-spin" : ""} />
             </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="icon-sm"
+              aria-label="Delete all messages"
+              disabled={
+                !activeAddress ||
+                filtered.length === 0 ||
+                isRefreshing ||
+                isDeletingMessages
+              }
+              onClick={() => setDeleteConfirmOpen(true)}
+            >
+              {isDeletingMessages ? (
+                <RefreshCwIcon className="animate-spin" />
+              ) : (
+                <Trash2Icon />
+              )}
+            </Button>
           </div>
+          <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Delete all messages?</DialogTitle>
+                <DialogDescription>
+                  This will delete all messages for {activeAddress?.address}.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isDeletingMessages}
+                  onClick={() => setDeleteConfirmOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={isDeletingMessages}
+                  onClick={() => void handleDeleteAllMessages()}
+                >
+                  {isDeletingMessages ? <RefreshCwIcon className="animate-spin" /> : null}
+                  Delete messages
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup className="px-0">
@@ -356,9 +448,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
                   return (
                   <EmailContextMenu key={email.id} email={email}>
-                    <Link
-                      href={emailHref}
-                      className="flex min-w-0 flex-col items-start gap-2 overflow-hidden border-b p-4 text-sm leading-tight last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    <div
+                      role="link"
+                      tabIndex={0}
+                      className="flex min-w-0 cursor-pointer flex-col items-start gap-2 overflow-hidden border-b p-4 text-sm leading-tight last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onClick={() => router.push(emailHref)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault()
+                          router.push(emailHref)
+                        }
+                      }}
                     >
                       <div className="flex w-full min-w-0 items-center gap-2">
                         {!email.isRead && (
@@ -371,10 +471,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           {formatRelativeInboxTime(email.receivedAt)}
                         </span>
                       </div>
-                      <span className="w-full truncate font-medium">
-                        {email.subject}
+                      <span className="flex w-full min-w-0 items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate font-medium">
+                          {email.subject}
+                        </span>
+                        <EmailOtpChip
+                          subject={email.subject}
+                          snippet={email.snippet}
+                          className="shrink-0"
+                        />
                       </span>
-                    </Link>
+                    </div>
                   </EmailContextMenu>
                 )
               }))}

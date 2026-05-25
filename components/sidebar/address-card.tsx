@@ -1,13 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { PencilIcon, Trash2Icon } from "lucide-react"
+import { PencilIcon, SparklesIcon, Trash2Icon } from "lucide-react"
 import { toast } from "sonner"
 
 import CountdownBadge from "@/components/shared/countdown-badge"
-import CopyButton from "@/components/shared/copy-button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -30,6 +29,7 @@ import { Switch } from "@/components/ui/switch"
 import { buildInboxFolderHref, getInboxFolderFromPathname } from "@/lib/inbox"
 import {
   deleteAddress,
+  generateAddress,
   updateAddressLocalPart,
 } from "@/services/address.service"
 import { useAddressStore } from "@/stores/address.store"
@@ -38,6 +38,8 @@ import { useDomainStore } from "@/stores/domain.store"
 import { useInboxStore } from "@/stores/inbox.store"
 import type { GeneratedAddress } from "@/types"
 import { cn } from "@/lib/utils"
+import type { BackendDomainStatus } from "@/services/backend.service"
+import { useCopy } from "@/hooks/use-copy"
 
 interface AddressCardProps {
   address: GeneratedAddress
@@ -69,6 +71,26 @@ function isValidSubdomain(value: string) {
     .every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))
 }
 
+async function fetchAddressDomainStatus(domain: string) {
+  const res = await fetch(
+    `/api/domains/status?domain=${encodeURIComponent(domain)}`,
+    { cache: "no-store" }
+  )
+  const data = (await res.json().catch(() => null)) as
+    | (BackendDomainStatus & { error?: string })
+    | null
+
+  if (!res.ok) {
+    throw new Error(data?.error ?? "Failed to load domain status")
+  }
+
+  if (!data) {
+    throw new Error("Failed to load domain status")
+  }
+
+  return data
+}
+
 export default function AddressCard({
   address,
   compact = false,
@@ -83,11 +105,19 @@ export default function AddressCard({
   const resetInbox = useInboxStore((state) => state.resetInbox)
   const user = useAuthStore((state) => state.user)
   const updateAddress = useAddressStore((state) => state.updateAddress)
+  const { copy } = useCopy()
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [localPart, setLocalPart] = useState(getAddressLocalPart(address))
   const [useWildcard, setUseWildcard] = useState(false)
   const [subdomain, setSubdomain] = useState("")
+  const [domainStatus, setDomainStatus] =
+    useState<BackendDomainStatus | null>(null)
+  const [domainStatusError, setDomainStatusError] = useState<string | null>(
+    null
+  )
+  const [isCheckingDomain, setIsCheckingDomain] = useState(false)
+  const [isGeneratingSameDomain, setIsGeneratingSameDomain] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const isActive = activeAddressId === address.id
@@ -105,11 +135,83 @@ export default function AddressCard({
       ? actualDomainName.slice(0, -(rootDomainName.length + 1))
       : ""
 
+  useEffect(() => {
+    if (!actualDomainName) {
+      setDomainStatus(null)
+      setDomainStatusError(null)
+      setIsCheckingDomain(false)
+      return
+    }
+
+    let cancelled = false
+
+    async function loadStatus() {
+      setIsCheckingDomain(true)
+      setDomainStatusError(null)
+
+      try {
+        const status = await fetchAddressDomainStatus(actualDomainName)
+        if (!cancelled) setDomainStatus(status)
+      } catch (error) {
+        if (!cancelled) {
+          setDomainStatus(null)
+          setDomainStatusError(
+            error instanceof Error ? error.message : "Failed to load status"
+          )
+        }
+      } finally {
+        if (!cancelled) setIsCheckingDomain(false)
+      }
+    }
+
+    void loadStatus()
+
+    return () => {
+      cancelled = true
+    }
+  }, [actualDomainName])
+
   function openEditDialog() {
     setLocalPart(getAddressLocalPart(address))
     setUseWildcard(Boolean(currentSubdomain))
     setSubdomain(currentSubdomain)
     setEditOpen(true)
+  }
+
+  async function handleCopyAddress() {
+    setActiveAddress(address.id)
+    router.push(href)
+
+    try {
+      await copy(address.address)
+      toast.success("Email address copied")
+    } catch {
+      toast.error("Failed to copy email address")
+    }
+  }
+
+  async function handleGenerateSameDomain() {
+    setIsGeneratingSameDomain(true)
+
+    try {
+      const nextAddress = await generateAddress(
+        address.domainId,
+        rootDomainName,
+        Boolean(user),
+        currentSubdomain
+      )
+      resetInbox()
+      useAddressStore.getState().addAddress(nextAddress)
+      setActiveAddress(nextAddress.id)
+      router.push(buildInboxFolderHref(nextAddress, activeFolder))
+      toast.success("Email address created")
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create email address"
+      )
+    } finally {
+      setIsGeneratingSameDomain(false)
+    }
   }
 
   async function handleUpdateAddress() {
@@ -220,11 +322,45 @@ export default function AddressCard({
             </Avatar>
           )}
           <span className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="truncate font-medium">{address.address}</span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <button
+                type="button"
+                className="min-w-0 truncate text-left font-medium hover:underline"
+                aria-label={`Copy ${address.address}`}
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  void handleCopyAddress()
+                }}
+              >
+                {address.address}
+              </button>
+              <AddressDomainStatusBadge
+                status={domainStatus}
+                error={domainStatusError}
+                isLoading={isCheckingDomain}
+              />
+            </span>
             {!compact && <CountdownBadge expiresAt={address.expiresAt} />}
           </span>
           {compact && <CountdownBadge expiresAt={address.expiresAt} />}
-          <CopyButton text={address.address} />
+          <button
+            type="button"
+            aria-label={`Generate new email from ${actualDomainName}`}
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            disabled={isGeneratingSameDomain}
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              void handleGenerateSameDomain()
+            }}
+          >
+            {isGeneratingSameDomain ? (
+              <Spinner className="size-4" />
+            ) : (
+              <SparklesIcon className="size-4" />
+            )}
+          </button>
           <button
             type="button"
             aria-label={`Customize ${address.address}`}
@@ -375,5 +511,49 @@ export default function AddressCard({
         </DialogContent>
       </Dialog>
     </SidebarMenuItem>
+  )
+}
+
+function AddressDomainStatusBadge({
+  status,
+  error,
+  isLoading,
+}: {
+  status: BackendDomainStatus | null
+  error: string | null
+  isLoading: boolean
+}) {
+  if (isLoading) {
+    return (
+      <span
+        className="size-1.5 shrink-0 rounded-full bg-muted-foreground/60"
+        title="Checking domain status"
+      />
+    )
+  }
+
+  if (error) {
+    return (
+      <span
+        className="size-2 shrink-0 rounded-full bg-muted-foreground"
+        title={error}
+        aria-label="Domain status unknown"
+      />
+    )
+  }
+
+  if (!status) return null
+
+  const isValid = status.active && status.approved && status.mx_valid
+
+  return (
+    <span
+      className={cn(
+        "size-2 shrink-0 rounded-full",
+        isValid ? "bg-emerald-500" : "bg-destructive"
+      )}
+      title={`${isValid ? "Valid" : "Invalid"} domain. ${status.status_label}`}
+      aria-label={isValid ? "Valid domain" : "Invalid domain"}
+    />
   )
 }
