@@ -10,6 +10,7 @@ const voucherSchema = new mongoose.Schema(
       trim: true,
     },
     durationDays: { type: Number, required: true, default: 30 },
+    privateDomainLimit: { type: Number, required: true, default: 1 },
     maxUses: { type: Number, required: true, default: 1 },
     usedCount: { type: Number, required: true, default: 0 },
     expiresAt: { type: Date, required: true },
@@ -25,7 +26,7 @@ const voucherSchema = new mongoose.Schema(
         domainId: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Domain",
-          required: true,
+          default: null,
         },
         redeemedAt: { type: Date, required: true, default: Date.now },
         privateUntil: { type: Date, required: true },

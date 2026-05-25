@@ -14,17 +14,26 @@ import { useCopy } from "@/hooks/use-copy"
 interface CopyButtonProps {
   text: string
   className?: string
+  label?: string
+  successMessage?: string
+  errorMessage?: string
 }
 
-export default function CopyButton({ text, className }: CopyButtonProps) {
+export default function CopyButton({
+  text,
+  className,
+  label = "Copy address",
+  successMessage = "Email address copied",
+  errorMessage = "Failed to copy email address",
+}: CopyButtonProps) {
   const { copied, copy } = useCopy()
 
   async function handleCopy() {
     try {
       await copy(text)
-      toast.success("Email address copied")
+      toast.success(successMessage)
     } catch {
-      toast.error("Failed to copy email address")
+      toast.error(errorMessage)
     }
   }
 
@@ -36,7 +45,7 @@ export default function CopyButton({ text, className }: CopyButtonProps) {
           variant="ghost"
           size="icon"
           className={className}
-          aria-label="Copy address"
+          aria-label={label}
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
@@ -46,7 +55,7 @@ export default function CopyButton({ text, className }: CopyButtonProps) {
           {copied ? <CheckIcon /> : <CopyIcon />}
         </Button>
       </TooltipTrigger>
-      <TooltipContent>Copy address</TooltipContent>
+      <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   )
 }

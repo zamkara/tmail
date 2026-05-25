@@ -2,6 +2,13 @@ export interface AuthUser {
   id: string
   name: string
   email: string
+  isPremium: boolean
+  premiumUntil: string | null
+  premiumPrivateDomainLimit: number
+  apiKeyPrefix: string | null
+  apiKeyAllowAllIps: boolean
+  apiKeyAllowedIps: string[]
+  apiKeyBlockedIps: string[]
 }
 
 export async function register(name: string, email: string, password: string): Promise<AuthUser> {
@@ -35,4 +42,41 @@ export async function getMe(): Promise<AuthUser | null> {
   if (!res.ok) return null
   const data = await res.json()
   return data.user
+}
+
+export async function generateApiKey(): Promise<{
+  apiKey: string
+  apiKeyPrefix: string
+  user: AuthUser
+}> {
+  const res = await fetch("/api/auth/api-key", { method: "POST" })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? "Failed to generate API key")
+  return data
+}
+
+export async function getApiKey(): Promise<{
+  apiKey: string | null
+  apiKeyPrefix: string | null
+  user: AuthUser
+}> {
+  const res = await fetch("/api/auth/api-key", { cache: "no-store" })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? "Failed to load API key")
+  return data
+}
+
+export async function updateApiKeyAccess(input: {
+  allowAllIps: boolean
+  allowedIps: string[]
+  blockedIps: string[]
+}): Promise<{ user: AuthUser }> {
+  const res = await fetch("/api/auth/api-key", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? "Failed to update API key access")
+  return data
 }

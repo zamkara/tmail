@@ -124,6 +124,7 @@ interface AdminVoucher {
   id: string
   code: string
   durationDays: number
+  privateDomainLimit: number
   maxUses: number
   usedCount: number
   expiresAt: string
@@ -652,6 +653,7 @@ function AdminPanel({
   async function bulkCreateVouchers(data: {
     code: string
     durationDays: number
+    privateDomainLimit: number
     maxUses: number
     expiresAt: string
     note: string
@@ -680,6 +682,7 @@ function AdminPanel({
     voucherId: string,
     payload: {
       durationDays: number
+      privateDomainLimit: number
       maxUses: number
       expiresAt: string
       isActive: boolean
@@ -1956,6 +1959,7 @@ function VouchersModule({
   onBulkCreate: (data: {
     code: string
     durationDays: number
+    privateDomainLimit: number
     maxUses: number
     expiresAt: string
     note: string
@@ -1965,6 +1969,7 @@ function VouchersModule({
     voucherId: string,
     payload: {
       durationDays: number
+      privateDomainLimit: number
       maxUses: number
       expiresAt: string
       isActive: boolean
@@ -1998,10 +2003,19 @@ function VouchersModule({
       selectedIds.size > 0
         ? vouchers.filter((v) => selectedIds.has(v.id))
         : vouchers
-    const headers = ["Code", "Duration", "Max Uses", "Used", "Status", "Note"]
+    const headers = [
+      "Code",
+      "Duration",
+      "Private Domain Limit",
+      "Max Redemptions",
+      "Used",
+      "Status",
+      "Note",
+    ]
     const rows = items.map((v) => [
       v.code,
       formatDuration(v.durationDays),
+      String(v.privateDomainLimit ?? 1),
       String(v.maxUses),
       String(v.usedCount),
       v.isActive ? "Active" : "Inactive",
@@ -2074,6 +2088,7 @@ function VouchersModule({
               await onBulkCreate({
                 code: String(form.get("code") ?? ""),
                 durationDays,
+                privateDomainLimit: Number(form.get("privateDomainLimit") ?? 1),
                 maxUses: Number(form.get("maxUses") ?? 1),
                 expiresAt: "",
                 note: String(form.get("note") ?? ""),
@@ -2096,7 +2111,22 @@ function VouchersModule({
               </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field>
-                  <FieldLabel htmlFor="v-uses">Max Uses</FieldLabel>
+                  <FieldLabel htmlFor="v-private-limit">
+                    Private Domain Limit
+                  </FieldLabel>
+                  <Input
+                    id="v-private-limit"
+                    name="privateDomainLimit"
+                    type="number"
+                    min={1}
+                    defaultValue={1}
+                  />
+                  <FieldDescription>
+                    Private domains allowed for the user.
+                  </FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="v-uses">Max Redemptions</FieldLabel>
                   <Input
                     id="v-uses"
                     name="maxUses"
@@ -2183,6 +2213,7 @@ function VouchersModule({
                 </TableHead>
                 <TableHead>Code</TableHead>
                 <TableHead>Duration</TableHead>
+                <TableHead>Private Limit</TableHead>
                 <TableHead>Used</TableHead>
                 <TableHead>Note</TableHead>
                 <TableHead>Status</TableHead>
@@ -2223,6 +2254,11 @@ function VouchersModule({
                       {formatDuration(voucher.durationDays)}
                     </TableCell>
                     <TableCell>
+                      <Badge variant="outline">
+                        {voucher.privateDomainLimit ?? 1}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       <Badge variant="secondary">
                         {voucher.usedCount}/{voucher.maxUses}
                       </Badge>
@@ -2238,6 +2274,8 @@ function VouchersModule({
                         onCheckedChange={(checked) =>
                           void onUpdate(voucher.id, {
                             durationDays: voucher.durationDays,
+                            privateDomainLimit:
+                              voucher.privateDomainLimit ?? 1,
                             maxUses: voucher.maxUses,
                             expiresAt: voucher.expiresAt,
                             isActive: checked,

@@ -20,6 +20,7 @@ export async function PATCH(
 
   const body = (await req.json().catch(() => null)) as {
     durationDays?: unknown
+    privateDomainLimit?: unknown
     maxUses?: unknown
     expiresAt?: unknown
     isActive?: unknown
@@ -29,6 +30,14 @@ export async function PATCH(
 
   if (typeof body?.durationDays === "number") {
     patch.durationDays = Math.max(1, Math.floor(body.durationDays))
+  }
+  if (typeof body?.privateDomainLimit === "number") {
+    patch.privateDomainLimit = Math.max(
+      1,
+      Math.floor(body.privateDomainLimit)
+    )
+  } else if (typeof body?.maxUses === "number") {
+    patch.privateDomainLimit = Math.max(1, Math.floor(body.maxUses))
   }
   if (typeof body?.maxUses === "number") {
     patch.maxUses = Math.max(1, Math.floor(body.maxUses))
@@ -59,6 +68,7 @@ export async function PATCH(
     id: voucher._id.toString(),
     code: voucher.code,
     durationDays: voucher.durationDays,
+    privateDomainLimit: voucher.privateDomainLimit,
     maxUses: voucher.maxUses,
     usedCount: voucher.usedCount,
     expiresAt: voucher.expiresAt,

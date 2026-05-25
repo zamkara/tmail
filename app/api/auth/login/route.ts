@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs"
 import { NextResponse } from "next/server"
 
-import { AUTH_COOKIE } from "@/lib/auth"
+import { AUTH_COOKIE, serializeAuthUser } from "@/lib/auth"
 import { connectDB } from "@/lib/db"
 import { signToken } from "@/lib/jwt"
 import {
@@ -60,9 +60,7 @@ export async function POST(req: Request) {
       email: user.email,
     })
 
-    const res = NextResponse.json({
-      user: { id: user._id.toString(), name: user.name, email: user.email },
-    })
+    const res = NextResponse.json({ user: serializeAuthUser(user) })
 
     res.cookies.set(AUTH_COOKIE, token, {
       httpOnly: true,

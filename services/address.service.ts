@@ -33,6 +33,36 @@ export async function generateAddressForUser(domainId: string): Promise<Generate
   return address
 }
 
+export async function deleteAddress(addressId: string): Promise<void> {
+  const res = await fetch(`/api/addresses/${addressId}`, {
+    method: "DELETE",
+  })
+  const data = await res.json().catch(() => null)
+
+  if (!res.ok) {
+    throw new Error(data?.error ?? "Failed to delete address")
+  }
+}
+
+export async function updateAddressLocalPart(
+  addressId: string,
+  localPart: string,
+  subdomain = ""
+): Promise<GeneratedAddress> {
+  const res = await fetch(`/api/addresses/${addressId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ localPart, subdomain }),
+  })
+  const data = await res.json().catch(() => null)
+
+  if (!res.ok) {
+    throw new Error(data?.error ?? "Failed to update address")
+  }
+
+  return data as GeneratedAddress
+}
+
 // Untuk guest: generate lokal, disimpan di localStorage via store
 export function generateAddressLocally(domainId: string, domainName: string): GeneratedAddress {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
