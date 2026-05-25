@@ -1,6 +1,5 @@
 import type { EmailDetail, EmailItem } from "@/types"
-
-const BASE = process.env.NEXT_PUBLIC_EMAIL_API_URL?.trim() ?? ""
+import { buildBackendUrl } from "@/services/backend.service"
 
 interface BeInboxItem {
   id: string
@@ -36,13 +35,7 @@ function mapInboxItem(msg: BeInboxItem, addressId: string): EmailItem {
 }
 
 function buildEmailApiUrl(path: string) {
-  if (!BASE) return null
-
-  try {
-    return new URL(path, BASE)
-  } catch {
-    return null
-  }
+  return buildBackendUrl(path)
 }
 
 export async function getEmails(addressId: string, address: string): Promise<EmailItem[]> {

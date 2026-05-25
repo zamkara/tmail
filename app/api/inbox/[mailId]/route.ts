@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
 
+import { buildBackendUrl } from "@/services/backend.service"
+
 const BASE = process.env.NEXT_PUBLIC_EMAIL_API_URL?.trim() ?? ""
 export const dynamic = "force-dynamic"
 
@@ -15,10 +17,8 @@ export async function GET(
     )
   }
 
-  let target: URL
-  try {
-    target = new URL(`/messages/${mailId}`, BASE)
-  } catch {
+  const target = buildBackendUrl(`/messages/${mailId}`)
+  if (!target) {
     return NextResponse.json(
       { error: "Email API tidak dikonfigurasi" },
       { status: 404 }

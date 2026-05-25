@@ -6,6 +6,7 @@ import {
   MailOpenIcon,
   RefreshCwIcon,
   SearchIcon,
+  Trash2Icon,
   XIcon,
   AstroidIcon,
 } from "lucide-react"
@@ -15,7 +16,8 @@ import CopyButton from "@/components/shared/copy-button"
 import DomainAddressSwitcher from "@/components/guest/domain-address-switcher"
 import EmailOtpChip from "@/components/inbox/email-otp-chip"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Empty,
@@ -35,6 +37,7 @@ import { resolveDomainSource } from "@/lib/domain-source"
 import { cn } from "@/lib/utils"
 import { formatRelativeInboxTime, parseInboxSender } from "@/lib/inbox"
 import { generateAddress } from "@/services/address.service"
+import type { BackendDomainStatus } from "@/services/backend.service"
 import { addDomain, getDomains, verifyDomain } from "@/services/domain.service"
 import { useAddressStore } from "@/stores/address.store"
 import { useAuthStore } from "@/stores/auth.store"
@@ -48,7 +51,8 @@ import type {
   GeneratedAddress,
 } from "@/types"
 
-const INBOX_REFRESH_MS = 15000
+const DEFAULT_INBOX_REFRESH_MS = 30000
+const WEBSOCKET_CONNECTED_REFRESH_MS = 60000
 const INBOX_FETCH_TIMEOUT_MS = 8000
 
 interface BeInboxItem {
@@ -145,6 +149,16 @@ function createGuestAddress(
   }
 }
 
+function getAddressDomain(address: string) {
+  return address.split("@")[1]?.trim().toLowerCase() ?? ""
+}
+
+async function fetchDomainStatus(domain: string) {
+  return fetchJsonWithTimeout<BackendDomainStatus>(
+    `/api/domains/status?domain=${encodeURIComponent(domain)}`
+  )
+}
+
 function getPublicDomains(domains: Domain[]) {
   return domains.filter((domain) => domain.visibility !== "private")
 }
@@ -164,13 +178,17 @@ function findMatchingDomain(domainPart: string, domains: Domain[]) {
     }) ?? null
 }
 
-async function fetchJsonWithTimeout<T>(url: string): Promise<T> {
+async function fetchJsonWithTimeout<T>(
+  url: string,
+  init?: RequestInit
+): Promise<T> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), INBOX_FETCH_TIMEOUT_MS)
 
   try {
     const res = await fetch(url, {
       cache: "no-store",
+      ...init,
       signal: controller.signal,
     })
 
@@ -211,9 +229,18 @@ export default function GuestMailWorkspace() {
   )
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isDeletingMessages, setIsDeletingMessages] = useState(false)
   const [isLoadingDomains, setIsLoadingDomains] = useState(false)
   const [appSettings, setAppSettings] = useState<PublicAppSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [domainStatus, setDomainStatus] =
+    useState<BackendDomainStatus | null>(null)
+  const [domainStatusError, setDomainStatusError] = useState<string | null>(
+    null
+  )
+  const [isLoadingDomainStatus, setIsLoadingDomainStatus] = useState(false)
+  const [isBackendWebSocketConnected, setIsBackendWebSocketConnected] =
+    useState(false)
   const prevEmailCountRef = useRef(0)
   const autoAddressPromiseRef = useRef<Promise<GeneratedAddress> | null>(null)
   const domainLoadStartedRef = useRef(false)
@@ -236,7 +263,7 @@ export default function GuestMailWorkspace() {
           setAppSettings({
             allowGuestAddresses: true,
             allowWildcardSubdomains: true,
-            inboxRefreshSeconds: INBOX_REFRESH_MS / 1000,
+            inboxRefreshSeconds: DEFAULT_INBOX_REFRESH_MS / 1000,
           })
         }
       }
@@ -295,6 +322,55 @@ export default function GuestMailWorkspace() {
     [activeAddressId, addresses]
   )
   const activeAddressEmail = activeAddress?.address ?? null
+  const activeAddressDomain = activeAddressEmail
+    ? getAddressDomain(activeAddressEmail)
+    : ""
+  const inboxRefreshMs = useMemo(() => {
+    if (isBackendWebSocketConnected) return WEBSOCKET_CONNECTED_REFRESH_MS
+
+    const refreshSeconds = appSettings?.inboxRefreshSeconds
+    if (typeof refreshSeconds !== "number") return DEFAULT_INBOX_REFRESH_MS
+
+    return Math.max(30000, refreshSeconds * 1000)
+  }, [appSettings?.inboxRefreshSeconds, isBackendWebSocketConnected])
+
+  useEffect(() => {
+    if (!activeAddressDomain) {
+      setDomainStatus(null)
+      setDomainStatusError(null)
+      setIsLoadingDomainStatus(false)
+      return
+    }
+
+    let cancelled = false
+
+    async function loadDomainStatus() {
+      setIsLoadingDomainStatus(true)
+      setDomainStatusError(null)
+
+      try {
+        const status = await fetchDomainStatus(activeAddressDomain)
+        if (!cancelled) setDomainStatus(status)
+      } catch (error) {
+        if (!cancelled) {
+          setDomainStatus(null)
+          setDomainStatusError(
+            error instanceof Error
+              ? error.message
+              : "Failed to load domain status"
+          )
+        }
+      } finally {
+        if (!cancelled) setIsLoadingDomainStatus(false)
+      }
+    }
+
+    void loadDomainStatus()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeAddressDomain])
 
   useEffect(() => {
     if (!authLoaded) return
@@ -390,17 +466,53 @@ export default function GuestMailWorkspace() {
     }
   }, [activeAddress, readIds])
 
+  async function handleDeleteAllMessages() {
+    if (!activeAddress || isDeletingMessages) return
+
+    const confirmed = window.confirm(
+      `Delete all messages for ${activeAddress.address}?`
+    )
+    if (!confirmed) return
+
+    setIsDeletingMessages(true)
+
+    try {
+      const data = await fetchJsonWithTimeout<{
+        messages_deleted?: number
+      }>(`/api/inbox?address=${encodeURIComponent(activeAddress.address)}`, {
+        method: "DELETE",
+      })
+
+      setEmails([])
+      setExpandedEmailId(null)
+      setEmailDetails({})
+      setError(null)
+      toast.success(`Deleted ${data.messages_deleted ?? 0} messages`)
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete messages"
+      )
+    } finally {
+      setIsDeletingMessages(false)
+    }
+  }
+
   useEffect(() => {
     void loadEmails()
 
-    if (!activeAddress) return
+    if (!activeAddress) {
+      setIsBackendWebSocketConnected(false)
+      return
+    }
 
     const interval = window.setInterval(() => {
-      void loadEmails()
-    }, INBOX_REFRESH_MS)
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        void loadEmails()
+      }
+    }, inboxRefreshMs)
 
     return () => window.clearInterval(interval)
-  }, [activeAddress, loadEmails])
+  }, [activeAddress, inboxRefreshMs, loadEmails])
 
   useEffect(() => {
     function handleBackendUpdate(event: Event) {
@@ -413,9 +525,29 @@ export default function GuestMailWorkspace() {
       void loadEmails()
     }
 
+    function handleBackendWebSocketStatus(event: Event) {
+      const customEvent = event as CustomEvent<{
+        email?: string | null
+        connected?: boolean
+      }>
+      if (customEvent.detail.email && customEvent.detail.email !== activeAddressEmail) {
+        return
+      }
+      setIsBackendWebSocketConnected(Boolean(customEvent.detail.connected))
+    }
+
     window.addEventListener("tmail:backend-inbox-update", handleBackendUpdate)
-    return () =>
+    window.addEventListener(
+      "tmail:backend-ws-status",
+      handleBackendWebSocketStatus
+    )
+    return () => {
       window.removeEventListener("tmail:backend-inbox-update", handleBackendUpdate)
+      window.removeEventListener(
+        "tmail:backend-ws-status",
+        handleBackendWebSocketStatus
+      )
+    }
   }, [activeAddressEmail, loadEmails])
 
   useEffect(() => {
@@ -460,12 +592,10 @@ export default function GuestMailWorkspace() {
     }
   }
 
-  async function handleWillcardSubdomain(withSubdomain?: boolean) {
+  async function handleGenerateRandomAddress(withSubdomain: boolean) {
     setIsWillcardLoading(true)
     const shouldUseSubdomain =
-      appSettings?.allowWildcardSubdomains === false
-        ? false
-        : (withSubdomain ?? useSubdomain)
+      withSubdomain && appSettings?.allowWildcardSubdomains !== false
     try {
       if (publicDomains.length === 0) {
         toast.error("No domains available")
@@ -608,8 +738,7 @@ export default function GuestMailWorkspace() {
     }
   }
 
-  const [useSubdomain, setUseSubdomain] = useState(true)
-
+  const [useSubdomain, setUseSubdomain] = useState(false)
   const [isWillcardLoading, setIsWillcardLoading] = useState(false)
 
   return (
@@ -647,62 +776,41 @@ export default function GuestMailWorkspace() {
                 <CopyButton text={activeAddress.address} className="size-10" />
               </Card>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="hidden sm:block">
                 <DomainAddressSwitcher hideGenerate />
               </div>
-              <div
-                role="button"
-                tabIndex={!activeAddress || isWillcardLoading ? -1 : 0}
-                aria-disabled={!activeAddress || isWillcardLoading}
-                onClick={() => {
-                  if (activeAddress && !isWillcardLoading)
-                    void handleWillcardSubdomain(useSubdomain)
-                }}
-                onKeyDown={(e) => {
-                  if (
-                    (e.key === "Enter" || e.key === " ") &&
-                    activeAddress &&
-                    !isWillcardLoading
-                  ) {
-                    e.preventDefault()
-                    void handleWillcardSubdomain(useSubdomain)
-                  }
-                }}
-                className={cn(
-                  buttonVariants({ variant: "outline", size: "lg" }),
-                  "w-full justify-between gap-2",
-                  (!activeAddress || isWillcardLoading) &&
-                    "pointer-events-none opacity-50"
-                )}
-              >
-                <span className="flex items-center gap-2">
-                  {isWillcardLoading ? (
-                    <Spinner className="size-4" />
-                  ) : (
-                    <AstroidIcon className="size-4" />
-                  )}
-                  New Address
-                </span>
-                <span
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                  className="pointer-events-auto"
-                >
-                  <Switch
-                    aria-label="Willcard Subdomain"
-                    checked={useSubdomain}
-                    onCheckedChange={(checked) => {
-                      setUseSubdomain(checked)
-                      void handleWillcardSubdomain(checked)
-                    }}
-                    size="default"
-                    title="Willcard"
-                    className="mt-1"
-                  />
-                </span>
+              <div className="flex h-10 items-center justify-between gap-3 rounded-md border px-4">
+                <span className="text-sm font-medium">Wildcard Domain</span>
+                <Switch
+                  aria-label="Wildcard Domain"
+                  checked={useSubdomain}
+                  disabled={appSettings?.allowWildcardSubdomains === false}
+                  onCheckedChange={setUseSubdomain}
+                />
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                disabled={!activeAddress || isWillcardLoading}
+                onClick={() => void handleGenerateRandomAddress(useSubdomain)}
+                className="w-full justify-start gap-2"
+              >
+                {isWillcardLoading ? (
+                  <Spinner className="size-4" />
+                ) : (
+                  <AstroidIcon className="size-4" />
+                )}
+                New Address
+              </Button>
             </div>
+            <DomainStatusSummary
+              domain={activeAddressDomain}
+              status={domainStatus}
+              error={domainStatusError}
+              isLoading={isLoadingDomainStatus}
+            />
           </>
         ) : (
           <p className="py-2 text-center text-sm text-muted-foreground">
@@ -750,10 +858,31 @@ export default function GuestMailWorkspace() {
               variant="ghost"
               size="icon-sm"
               aria-label="Refresh inbox"
-              disabled={!activeAddress || isLoading}
+              disabled={!activeAddress || isLoading || isDeletingMessages}
               onClick={() => void loadEmails()}
             >
               {isLoading ? <Spinner /> : <RefreshCwIcon />}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              aria-label="Delete all messages"
+              disabled={
+                !activeAddress ||
+                emails.length === 0 ||
+                isLoading ||
+                isDeletingMessages
+              }
+              onClick={() => void handleDeleteAllMessages()}
+              className="gap-2"
+            >
+              {isDeletingMessages ? (
+                <Spinner className="size-4" />
+              ) : (
+                <Trash2Icon className="size-4" />
+              )}
+              <span className="hidden sm:inline">Delete All Message</span>
             </Button>
           </div>
         </CardHeader>
@@ -848,6 +977,62 @@ export default function GuestMailWorkspace() {
 function getSenderInitial(email: EmailItem) {
   const label = email.from.name ?? email.from.email
   return label.slice(0, 1).toUpperCase()
+}
+
+function DomainStatusSummary({
+  domain,
+  status,
+  error,
+  isLoading,
+}: {
+  domain: string
+  status: BackendDomainStatus | null
+  error: string | null
+  isLoading: boolean
+}) {
+  if (!domain) return null
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+        <Spinner className="size-4" />
+        <span>Checking domain status for {domain}...</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+        <Badge variant="destructive">Status unknown</Badge>
+        <span className="min-w-0 text-muted-foreground">{error}</span>
+      </div>
+    )
+  }
+
+  if (!status) return null
+
+  const isValid = status.active && status.approved && status.mx_valid
+  const uptime = status.uptime_label ?? `${status.uptime_days} days`
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+      <span className="min-w-0 truncate font-medium">{status.domain}</span>
+      <Badge
+        variant={isValid ? "default" : "destructive"}
+        className={cn(isValid && "bg-emerald-600 text-white")}
+      >
+        {status.approved ? "Approved" : "Not approved"}
+      </Badge>
+      <Badge variant={status.active ? "outline" : "destructive"}>
+        {status.active ? "Active" : "Inactive"}
+      </Badge>
+      <Badge variant={status.mx_valid ? "outline" : "destructive"}>
+        {status.mx_valid ? "MX valid" : "MX invalid"}
+      </Badge>
+      <span className="text-muted-foreground">Uptime {uptime}</span>
+    </div>
+  )
 }
 
 function EmailItemButton({

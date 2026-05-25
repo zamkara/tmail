@@ -52,7 +52,8 @@ const navMain = [
   },
 ] as const
 
-const INBOX_POLL_INTERVAL_MS = 5000
+const INBOX_FALLBACK_POLL_INTERVAL_MS = 5000
+const INBOX_WEBSOCKET_POLL_INTERVAL_MS = 60000
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [emails, setEmails] = React.useState<EmailItem[]>([])
@@ -60,6 +61,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [search, setSearch] = React.useState("")
   const [isRefreshing, setIsRefreshing] = React.useState(false)
   const [isAutoRefreshing, setIsAutoRefreshing] = React.useState(false)
+  const [isBackendWebSocketConnected, setIsBackendWebSocketConnected] =
+    React.useState(false)
   const params = useParams<{ slug?: string[] }>()
   const pathname = usePathname()
   const router = useRouter()
@@ -138,19 +141,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     if (!activeAddress) {
       emailsRef.current = []
       setEmails([])
+      setIsBackendWebSocketConnected(false)
       return
     }
 
     void refreshActiveAddress()
 
+    const pollInterval = isBackendWebSocketConnected
+      ? INBOX_WEBSOCKET_POLL_INTERVAL_MS
+      : INBOX_FALLBACK_POLL_INTERVAL_MS
+
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible" && navigator.onLine) {
         void refreshActiveAddress(true)
       }
-    }, INBOX_POLL_INTERVAL_MS)
+    }, pollInterval)
 
     function handleVisible() {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === "visible" && navigator.onLine) {
         void refreshActiveAddress(true)
       }
     }
@@ -165,17 +173,41 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       void refreshActiveAddress(true)
     }
 
+    function handleBackendWebSocketStatus(event: Event) {
+      const customEvent = event as CustomEvent<{
+        email?: string | null
+        connected?: boolean
+      }>
+      if (customEvent.detail.email && customEvent.detail.email !== activeAddressEmail) {
+        return
+      }
+      setIsBackendWebSocketConnected(Boolean(customEvent.detail.connected))
+    }
+
     window.addEventListener("focus", handleVisible)
     document.addEventListener("visibilitychange", handleVisible)
     window.addEventListener("tmail:backend-inbox-update", handleBackendUpdate)
+    window.addEventListener(
+      "tmail:backend-ws-status",
+      handleBackendWebSocketStatus
+    )
 
     return () => {
       window.clearInterval(interval)
       window.removeEventListener("focus", handleVisible)
       document.removeEventListener("visibilitychange", handleVisible)
       window.removeEventListener("tmail:backend-inbox-update", handleBackendUpdate)
+      window.removeEventListener(
+        "tmail:backend-ws-status",
+        handleBackendWebSocketStatus
+      )
     }
-  }, [activeAddress, activeAddressEmail, refreshActiveAddress])
+  }, [
+    activeAddress,
+    activeAddressEmail,
+    isBackendWebSocketConnected,
+    refreshActiveAddress,
+  ])
 
   async function handleRefresh() {
     if (!activeAddress) return
