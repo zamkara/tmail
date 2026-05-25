@@ -1,4 +1,5 @@
 import type { Domain } from "@/types"
+import type { AuthUser } from "@/services/auth.service"
 
 async function readError(res: Response) {
   const data = (await res.json().catch(() => null)) as { error?: string } | null
@@ -64,28 +65,29 @@ export async function setDomainVisibility(
 }
 
 export async function redeemDomainVoucher(
-  domainId: string,
   code: string
-): Promise<Pick<Domain, "id" | "name" | "visibility" | "privateUntil">> {
+): Promise<{
+  user: AuthUser
+}> {
   const res = await fetch("/api/vouchers/redeem", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ domainId, code }),
+    body: JSON.stringify({ code }),
   })
   const data = (await res.json().catch(() => null)) as {
     error?: string
-    domain?: Pick<Domain, "id" | "name" | "visibility" | "privateUntil">
+    user?: AuthUser
   } | null
 
   if (!res.ok) {
     throw new Error(data?.error ?? "Failed to redeem voucher")
   }
 
-  if (!data?.domain) {
-    throw new Error("Voucher response missing domain data")
+  if (!data?.user) {
+    throw new Error("Voucher response missing user data")
   }
 
-  return data.domain
+  return { user: data.user }
 }
 
 export async function deleteDomain(id: string): Promise<void> {

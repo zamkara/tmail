@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 
-import { getAuthUser } from "@/lib/auth"
+import { getAuthUser, serializeAuthUser } from "@/lib/auth"
 import { connectDB } from "@/lib/db"
 import { User } from "@/models/user.model"
 
@@ -20,7 +20,5 @@ export async function GET() {
     )
   }
 
-  return NextResponse.json({
-    user: { id: user._id.toString(), name: user.name, email: user.email },
-  })
+  return NextResponse.json({ user: serializeAuthUser(user) })
 }

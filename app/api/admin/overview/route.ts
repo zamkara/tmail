@@ -74,7 +74,7 @@ export async function GET() {
       Voucher.find({})
         .sort({ createdAt: -1 })
         .select(
-          "_id code durationDays maxUses usedCount expiresAt isActive note createdAt updatedAt"
+          "_id code durationDays privateDomainLimit maxUses usedCount expiresAt isActive note createdAt updatedAt"
         )
         .lean(),
       getAdminSettings(),
@@ -196,6 +196,7 @@ export async function GET() {
         id: voucher._id.toString(),
         code: voucher.code,
         durationDays: voucher.durationDays,
+        privateDomainLimit: voucher.privateDomainLimit ?? 1,
         maxUses: voucher.maxUses,
         usedCount: voucher.usedCount,
         expiresAt: voucher.expiresAt,

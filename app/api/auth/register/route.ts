@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 
 import { connectDB } from "@/lib/db"
 import { signToken } from "@/lib/jwt"
-import { AUTH_COOKIE } from "@/lib/auth"
+import { AUTH_COOKIE, serializeAuthUser } from "@/lib/auth"
 import {
   assertRateLimit,
   getRequestIdentifier,
@@ -56,9 +56,7 @@ export async function POST(req: Request) {
 
     const isSecure = new URL(req.url).protocol === "https:"
 
-    const res = NextResponse.json({
-      user: { id: user._id.toString(), name: user.name, email: user.email },
-    })
+    const res = NextResponse.json({ user: serializeAuthUser(user) })
 
     res.cookies.set(AUTH_COOKIE, token, {
       httpOnly: true,

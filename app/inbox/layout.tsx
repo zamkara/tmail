@@ -8,28 +8,28 @@ import {
   MobileAddressDrawerTrigger,
   MobileInboxDrawerTrigger,
 } from "@/components/mobile-sidebar-drawers"
+import InboxBreadcrumb from "@/components/inbox/inbox-breadcrumb"
 import ModeToggle from "@/components/shared/mode-toggle"
 import SyncActiveAddress from "@/components/sync-active-address"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { getAuthUser } from "@/lib/auth"
+import { redirect } from "next/navigation"
 
-export default function InboxLayout({
+export default async function InboxLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const auth = await getAuthUser()
+  if (!auth) {
+    redirect("/signin")
+  }
+
   return (
     <SidebarProvider
       style={
@@ -49,17 +49,7 @@ export default function InboxLayout({
               orientation="vertical"
               className="mr-2 data-vertical:h-4 data-vertical:self-auto"
             />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/inbox">tmail</BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Inbox</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
+            <InboxBreadcrumb />
             <div className="ml-auto flex items-center gap-1">
               <ModeToggle />
               <MobileAddressDrawerTrigger />

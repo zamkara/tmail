@@ -14,18 +14,14 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
 import {
   Field,
-  FieldError,
   FieldGroup,
-  FieldLabel,
 } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import {
   SidebarGroup,
@@ -41,7 +37,6 @@ import { Switch } from "@/components/ui/switch"
 import { generateAddress } from "@/services/address.service"
 import {
   getDomains,
-  redeemDomainVoucher,
   setDomainVisibility,
 } from "@/services/domain.service"
 import { useAddressStore } from "@/stores/address.store"
@@ -86,6 +81,14 @@ function hasPrivateAccessWindow(domain: Domain) {
   return !Number.isNaN(time) && time > Date.now()
 }
 
+function isPremiumActive(user: ReturnType<typeof useAuthStore.getState>["user"]) {
+  return Boolean(
+    user?.isPremium &&
+      user.premiumUntil &&
+      new Date(user.premiumUntil).getTime() > Date.now()
+  )
+}
+
 export default function DomainSection({ compact = false }: DomainSectionProps) {
   const domains = useDomainStore((state) => state.domains)
   const setDomains = useDomainStore((state) => state.setDomains)
@@ -120,7 +123,8 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
     }
   }, [setDomains, user?.id])
 
-  const sortedDomains = [...domains].sort((first, second) => {
+  const ownedDomains = domains.filter((domain) => domain.isOwnedByUser)
+  const sortedDomains = [...ownedDomains].sort((first, second) => {
     const order = { system: 0, user: 1, guest: 2 } as const
     const firstSource = resolveDomainSource(first)
     const secondSource = resolveDomainSource(second)
@@ -155,6 +159,11 @@ export default function DomainSection({ compact = false }: DomainSectionProps) {
       <SidebarGroupLabel>Domains</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
+          {sortedDomains.length === 0 ? (
+            <p className="px-2 py-3 text-sm text-muted-foreground">
+              No custom domains yet.
+            </p>
+          ) : null}
           {sortedDomains.map((domain) => {
             const Icon = domain.type === "system" ? GlobeIcon : Building2Icon
             const isLoading = loadingDomainId === domain.id
@@ -237,32 +246,26 @@ function ManageDomainDialog({
   onUpdated: (domain: Domain) => void
 }) {
   const [open, setOpen] = useState(false)
-  const [voucherCode, setVoucherCode] = useState("")
-  const [voucherError, setVoucherError] = useState("")
-  const [isRedeeming, setIsRedeeming] = useState(false)
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false)
+  const authUser = useAuthStore((s) => s.user)
   const privateUntilLabel = formatPrivateUntil(domain.privateUntil)
   const isPrivate = domain.visibility === "private"
-  const canTogglePrivate = hasPrivateAccessWindow(domain)
+  const canTogglePrivate = isPremiumActive(authUser) || hasPrivateAccessWindow(domain)
 
   return (
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
         setOpen(nextOpen)
-        if (nextOpen) {
-          setVoucherCode("")
-          setVoucherError("")
-        }
       }}
     >
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="p-0 sm:max-w-md">
         <div>
           <DialogHeader className="p-4 pb-3">
-            <DialogTitle>Redeem Voucher</DialogTitle>
+            <DialogTitle>Domain Access</DialogTitle>
             <DialogDescription>
-              Manage access for this domain in `/inbox`.
+              Manage private access for this domain in `/inbox`.
             </DialogDescription>
           </DialogHeader>
           <Separator />
@@ -316,84 +319,13 @@ function ManageDomainDialog({
                 </div>
               </Field>
               {!canTogglePrivate ? (
-                <Field data-invalid={Boolean(voucherError)}>
-                  <FieldLabel htmlFor={`voucher-${domain.id}`}>
-                    Private Access Voucher
-                  </FieldLabel>
-                  <Input
-                    id={`voucher-${domain.id}`}
-                    value={voucherCode}
-                    disabled={isRedeeming}
-                    aria-invalid={Boolean(voucherError)}
-                    placeholder="Enter voucher code"
-                    onChange={(event) => {
-                      setVoucherCode(event.target.value.toUpperCase())
-                      setVoucherError("")
-                    }}
-                  />
-                  <FieldError>{voucherError}</FieldError>
-                </Field>
-              ) : null}
-              {!canTogglePrivate ? (
                 <p className="text-sm text-muted-foreground">
-                  Guests can still access this domain until a valid voucher is
-                  redeemed.
+                  Activate a subscription from Billing before making this domain
+                  private.
                 </p>
               ) : null}
             </FieldGroup>
           </div>
-          {!canTogglePrivate ? (
-            <DialogFooter className="mx-0 mb-0 rounded-none border-t p-4">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={isRedeeming}
-                onClick={async () => {
-                  const normalizedCode = voucherCode.trim().toUpperCase()
-
-                  if (!normalizedCode) {
-                    setVoucherError("Enter a voucher code")
-                    return
-                  }
-
-                  setVoucherError("")
-                  setIsRedeeming(true)
-
-                  try {
-                    const redeemedDomain = await redeemDomainVoucher(
-                      domain.id,
-                      normalizedCode
-                    )
-                    onUpdated({
-                      ...domain,
-                      visibility: redeemedDomain.visibility,
-                      privateUntil: redeemedDomain.privateUntil ?? null,
-                      isVerified: true,
-                    })
-                    toast.success("Domain is now private")
-                    setVoucherCode("")
-                    setOpen(false)
-                  } catch (caughtError) {
-                    const message =
-                      caughtError instanceof Error
-                        ? caughtError.message
-                        : "Failed to redeem voucher"
-                    setVoucherError(message)
-                    toast.error(message)
-                  } finally {
-                    setIsRedeeming(false)
-                  }
-                }}
-              >
-                {isRedeeming ? (
-                  <Spinner data-icon="inline-start" />
-                ) : (
-                  <RefreshCwIcon data-icon="inline-start" />
-                )}
-                Redeem
-              </Button>
-            </DialogFooter>
-          ) : null}
         </div>
       </DialogContent>
     </Dialog>

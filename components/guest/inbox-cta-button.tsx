@@ -32,7 +32,7 @@ export default function InboxCtaButton({
       asChild
       className={className}
     >
-      <Link href="/inbox" className="relative overflow-hidden">
+      <Link href="/signin" className="relative overflow-hidden">
         {mobileIconOnly ? (
           <span className="sm:hidden">
             {showLogin ? (

@@ -54,14 +54,14 @@ export function buildInboxFolderHref(
   folder: InboxFolder
 ) {
   const base = buildInboxHref(address)
-  return folder === "inbox" ? base : `${base}/${folder}`
+  return folder === "inbox" ? base : `/inbox/${folder}/${base.replace("/inbox/", "")}`
 }
 
 export function getInboxFolderFromPathname(pathname: string): InboxFolder {
   const segments = pathname.split("/").filter(Boolean)
-  const last = segments.at(-1)
+  const folder = segments[1]
 
-  if (last === "junk" || last === "trash") return last
+  if (folder === "junk" || folder === "trash") return folder
   return "inbox"
 }
 

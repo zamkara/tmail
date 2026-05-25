@@ -28,27 +28,25 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-feat: perbaiki realtime inbox, domain status, dan cleanup pesan guest
+feat: major update for user, billing, and temporary email API key system
 
-Perubahan utama:
-- services/backend.service.ts: perbaiki builder URL backend agar path `/api/v1` tidak hilang untuk HTTP API, dan arahkan WebSocket default ke root `/ws`
-- app/api/inbox/* + services/mail.service.ts: gunakan builder backend yang konsisten untuk inbox list dan detail message
-- components/backend-inbox-sync.tsx: kirim status koneksi WebSocket ke komponen inbox agar polling bisa menyesuaikan kondisi realtime
-- components/app-sidebar.tsx + components/guest/guest-mail-workspace.tsx: polling inbox skip saat tab hidden/offline, fallback 5 detik saat WebSocket mati, dan 60 detik saat WebSocket connect
-- components/guest/guest-mail-workspace.tsx: pisahkan switch Wildcard Domain dari tombol New Address; wildcard default off dan hanya memengaruhi format address saat generate
-- app/api/domains/status/route.ts + components/guest/guest-mail-workspace.tsx: tampilkan status domain/subdomain aktif, approved, active, MX valid, dan uptime dari backend
-- app/api/inbox/route.ts + components/guest/guest-mail-workspace.tsx: tambahkan tombol Delete All Message yang proxy ke backend dengan token server-side
-- app/layout.tsx: ganti Google Sans Flex ke Geist untuk menghilangkan warning fallback font Next.js
-- lib/admin-settings.ts + models/admin-settings.model.ts: naikkan default/minimum public inbox refresh interval ke 30 detik
+Main changes:
+- refactor user management flow with major structural improvements and cleanup
+- improve billing system logic, validation, and transaction handling
+- redesign temporary email API key system for better security and maintainability
+- optimize backend service communication and API integration
+- fix multiple bugs across user, billing, and temporary email modules
+- improve error handling and response consistency across APIs
+- cleanup unused logic and enhance overall application stability
 
 Testing:
 - [x] `pnpm typecheck`
-- [ ] WebSocket connect ke `wss://api.thvuinin.my.id/ws`
-- [ ] Inbox guest dan login refresh dari event WebSocket tanpa harus manual refresh
-- [ ] New Address dengan Wildcard Domain off menghasilkan `local@domain`
-- [ ] New Address dengan Wildcard Domain on menghasilkan `local@sub.domain`
-- [ ] Status domain tampil setelah address aktif berubah
-- [ ] Delete All Message menghapus semua pesan pada address aktif
+- [ ] User registration and login flow
+- [ ] Billing transaction creation and validation
+- [ ] Temporary email API key generation and usage
+- [ ] API authentication and permission handling
+- [ ] Frontend and backend integration
+- [ ] General regression testing
 EOF
 )
 

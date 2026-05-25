@@ -11,6 +11,7 @@ interface AddressStore {
   setLoaded: () => void
   addAddress: (address: GeneratedAddress) => void
   updateAddress: (id: string, partial: Partial<GeneratedAddress>) => void
+  removeAddress: (id: string) => void
   setActiveAddress: (id: string | null) => void
   removeExpired: () => void
 }
@@ -63,6 +64,17 @@ export const useAddressStore = create<AddressStore>()(
             addr.id === id ? { ...addr, ...partial } : addr
           ),
         })),
+      removeAddress: (id) =>
+        set((state) => {
+          const addresses = state.addresses.filter((addr) => addr.id !== id)
+          return {
+            addresses,
+            activeAddressId:
+              state.activeAddressId === id
+                ? (addresses[0]?.id ?? null)
+                : state.activeAddressId,
+          }
+        }),
       setActiveAddress: (id) => set({ activeAddressId: id }),
       removeExpired: () =>
         set((state) => ({

@@ -18,6 +18,7 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as {
     code?: unknown
     durationDays?: unknown
+    privateDomainLimit?: unknown
     maxUses?: unknown
     expiresAt?: unknown
     note?: unknown
@@ -28,6 +29,10 @@ export async function POST(req: Request) {
     typeof body?.durationDays === "number" ? Math.max(1, body.durationDays) : 30
   const maxUses =
     typeof body?.maxUses === "number" ? Math.max(1, body.maxUses) : 1
+  const privateDomainLimit =
+    typeof body?.privateDomainLimit === "number"
+      ? Math.max(1, Math.floor(body.privateDomainLimit))
+      : Math.max(1, Math.floor(maxUses))
   const expiresAtRaw =
     typeof body?.expiresAt === "string" && body.expiresAt.trim()
       ? new Date(body.expiresAt)
@@ -52,6 +57,7 @@ export async function POST(req: Request) {
     const voucher = await Voucher.create({
       code,
       durationDays,
+      privateDomainLimit,
       maxUses,
       expiresAt: expiresAtRaw,
       isActive: true,
@@ -62,6 +68,7 @@ export async function POST(req: Request) {
       id: voucher._id.toString(),
       code: voucher.code,
       durationDays: voucher.durationDays,
+      privateDomainLimit: voucher.privateDomainLimit,
       maxUses: voucher.maxUses,
       usedCount: voucher.usedCount,
       expiresAt: voucher.expiresAt,

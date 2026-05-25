@@ -2,9 +2,12 @@ import { resolveMx } from "node:dns/promises"
 import mongoose from "mongoose"
 import { NextResponse } from "next/server"
 
-import { getAuthUser } from "@/lib/auth"
+import {
+  getAuthUser,
+  getPremiumPrivateDomainLimit,
+  isPremiumActive,
+} from "@/lib/auth"
 import { connectDB } from "@/lib/db"
-import { hasPrivateAccessWindow } from "@/lib/domain-access"
 import { resolveDomainSource } from "@/lib/domain-source"
 import {
   getMxVerificationError,
@@ -14,6 +17,7 @@ import {
   normalizeDomain,
 } from "@/lib/domain-validation"
 import { Domain } from "@/models/domain.model"
+import { User } from "@/models/user.model"
 
 export async function PATCH(
   req: Request,
@@ -85,11 +89,34 @@ export async function PATCH(
   }
 
   if (body?.visibility === "public" || body?.visibility === "private") {
-    if (body.visibility === "private" && !hasPrivateAccessWindow(domain)) {
-      return NextResponse.json(
-        { error: "Private access window is no longer active" },
-        { status: 400 }
-      )
+    if (body.visibility === "private") {
+      const user = await User.findById(auth.userId)
+      if (!user || !isPremiumActive(user)) {
+        return NextResponse.json(
+          { error: "Premium subscription is required" },
+          { status: 403 }
+        )
+      }
+
+      const activePrivateCount = await Domain.countDocuments({
+        _id: { $ne: domain._id },
+        userId: auth.userId,
+        type: "custom",
+        visibility: "private",
+        privateUntil: { $gt: new Date() },
+      })
+      const limit = getPremiumPrivateDomainLimit(user)
+
+      if (activePrivateCount >= limit) {
+        return NextResponse.json(
+          { error: "Private domain usage limit reached" },
+          { status: 403 }
+        )
+      }
+
+      domain.privateUntil = user.premiumUntil
+    } else {
+      domain.privateUntil = null
     }
 
     domain.visibility = body.visibility

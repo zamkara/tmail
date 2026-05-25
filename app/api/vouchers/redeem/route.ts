@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server"
 
-import { getAuthUser } from "@/lib/auth"
+import { getAuthUser, isPremiumActive, serializeAuthUser } from "@/lib/auth"
 import { connectDB } from "@/lib/db"
 import {
   assertRateLimit,
   getRequestIdentifier,
   isRateLimitError,
 } from "@/lib/rate-limit"
-import { Domain } from "@/models/domain.model"
 import { Voucher } from "@/models/voucher.model"
 import { User } from "@/models/user.model"
 
@@ -30,14 +29,12 @@ export async function POST(req: Request) {
 
     const body = (await req.json().catch(() => null)) as {
       code?: unknown
-      domainId?: unknown
     } | null
     const code = normalizeCode(body?.code)
-    const domainId = typeof body?.domainId === "string" ? body.domainId : ""
 
-    if (!code || !domainId) {
+    if (!code) {
       return NextResponse.json(
-        { error: "Voucher code and domain are required" },
+        { error: "Voucher code is required" },
         { status: 400 }
       )
     }
@@ -53,14 +50,15 @@ export async function POST(req: Request) {
         { status: 403 }
       )
     }
+    if (isPremiumActive(user)) {
+      return NextResponse.json(
+        { error: "Subscription is already active" },
+        { status: 409 }
+      )
+    }
 
-    const [voucher, domain] = await Promise.all([
-      Voucher.findOne({ code }),
-      Domain.findOne({ _id: domainId, userId: auth.userId }),
-    ])
+    const voucher = await Voucher.findOne({ code })
 
-    if (!domain)
-      return NextResponse.json({ error: "Domain not found" }, { status: 404 })
     if (!voucher || !voucher.isActive) {
       return NextResponse.json(
         { error: "Voucher is not active" },
@@ -81,28 +79,42 @@ export async function POST(req: Request) {
       Date.now() + voucher.durationDays * 24 * 60 * 60 * 1000
     )
 
-    voucher.usedCount += 1
-    voucher.redemptions.push({
-      userId: user._id,
-      domainId: domain._id,
-      redeemedAt: new Date(),
-      privateUntil,
-    })
+    const currentPremiumUntil = user.premiumUntil
+      ? new Date(user.premiumUntil)
+      : null
+    const nextPremiumUntil =
+      currentPremiumUntil && currentPremiumUntil > privateUntil
+        ? currentPremiumUntil
+        : privateUntil
 
-    domain.visibility = "private"
-    domain.privateUntil = privateUntil
-    domain.isVerified = true
+    user.isPremium = true
+    user.premiumUntil = nextPremiumUntil
+    user.premiumPrivateDomainLimit = Math.max(
+      1,
+      user.premiumPrivateDomainLimit ?? 0,
+      voucher.privateDomainLimit ?? 1
+    )
 
-    await Promise.all([voucher.save(), domain.save()])
+    await Promise.all([
+      Voucher.updateOne(
+        { _id: voucher._id },
+        {
+          $inc: { usedCount: 1 },
+          $push: {
+            redemptions: {
+              userId: user._id,
+              redeemedAt: new Date(),
+              privateUntil,
+            },
+          },
+        }
+      ),
+      user.save(),
+    ])
 
     return NextResponse.json({
       ok: true,
-      domain: {
-        id: domain._id.toString(),
-        name: domain.name,
-        visibility: domain.visibility,
-        privateUntil: domain.privateUntil,
-      },
+      user: serializeAuthUser(user),
     })
   } catch (error) {
     if (isRateLimitError(error)) {

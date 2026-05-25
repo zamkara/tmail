@@ -6,6 +6,9 @@ import {
   ChevronsUpDownIcon,
   CheckCircle2Icon,
   ClockIcon,
+  CreditCardIcon,
+  GiftIcon,
+  KeyRoundIcon,
   LogInIcon,
   LogOutIcon,
   MailIcon,
@@ -17,6 +20,7 @@ import { toast } from "sonner"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import CopyButton from "@/components/shared/copy-button"
 import {
   Dialog,
   DialogContent,
@@ -52,6 +56,7 @@ import { getGravatarUrl } from "@/lib/gravatar"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import { Textarea } from "@/components/ui/textarea"
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -59,7 +64,15 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Spinner } from "@/components/ui/spinner"
-import { login, register, logout } from "@/services/auth.service"
+import {
+  generateApiKey,
+  getApiKey,
+  login,
+  logout,
+  register,
+  updateApiKeyAccess,
+} from "@/services/auth.service"
+import { redeemDomainVoucher } from "@/services/domain.service"
 import { useAddressStore } from "@/stores/address.store"
 import { useAuthStore } from "@/stores/auth.store"
 
@@ -71,6 +84,8 @@ export function NavUser() {
   const router = useRouter()
   const [preferenceOpen, setPreferenceOpen] = React.useState(false)
   const [notificationsOpen, setNotificationsOpen] = React.useState(false)
+  const [billingOpen, setBillingOpen] = React.useState(false)
+  const [apiKeyOpen, setApiKeyOpen] = React.useState(false)
   const [authDialogOpen, setAuthDialogOpen] = React.useState(false)
   const [authMode, setAuthMode] = React.useState<"signin" | "signup">("signin")
   const [authLoading, setAuthLoading] = React.useState(false)
@@ -175,6 +190,16 @@ export function NavUser() {
                       <BellIcon />
                       Notifications
                     </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => setBillingOpen(true)}
+                    >
+                      <CreditCardIcon />
+                      Billing
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setApiKeyOpen(true)}>
+                      <KeyRoundIcon />
+                      Apikey
+                    </DropdownMenuItem>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={() => void handleLogout()}>
@@ -226,6 +251,16 @@ export function NavUser() {
       <NotificationsSurface
         open={notificationsOpen}
         onOpenChange={setNotificationsOpen}
+        isMobile={isMobile}
+      />
+      <BillingSurface
+        open={billingOpen}
+        onOpenChange={setBillingOpen}
+        isMobile={isMobile}
+      />
+      <ApiKeySurface
+        open={apiKeyOpen}
+        onOpenChange={setApiKeyOpen}
         isMobile={isMobile}
       />
     </>
@@ -483,6 +518,478 @@ function NotificationsSurface({
           <DialogDescription>Account notifications list.</DialogDescription>
         </DialogHeader>
         <ScrollArea className="max-h-105 px-4 pb-4">{content}</ScrollArea>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+interface BillingStatus {
+  subscription: {
+    isPremium: boolean
+    premiumUntil: string | null
+    privateDomainUsage: number
+    privateDomainLimit: number
+    privateDomainRemaining: number
+  }
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return "Not active"
+
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value))
+}
+
+function BillingContent() {
+  const authUser = useAuthStore((state) => state.user)
+  const setUser = useAuthStore((state) => state.setUser)
+  const [status, setStatus] = React.useState<BillingStatus | null>(null)
+  const [code, setCode] = React.useState("")
+  const [isLoading, setIsLoading] = React.useState(false)
+  const [isRedeeming, setIsRedeeming] = React.useState(false)
+  const [isCancelling, setIsCancelling] = React.useState(false)
+  const [cancelConfirmOpen, setCancelConfirmOpen] = React.useState(false)
+
+  const loadBilling = React.useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const res = await fetch("/api/billing", { cache: "no-store" })
+      const data = (await res.json()) as BillingStatus & {
+        user?: typeof authUser
+        error?: string
+      }
+      if (!res.ok) throw new Error(data.error ?? "Failed to load billing")
+      setStatus(data)
+      if (data.user) setUser(data.user)
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to load billing"
+      )
+    } finally {
+      setIsLoading(false)
+    }
+  }, [setUser])
+
+  React.useEffect(() => {
+    void loadBilling()
+  }, [loadBilling])
+
+  async function handleRedeem(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const normalizedCode = code.trim().toUpperCase()
+    if (!normalizedCode) {
+      toast.error("Enter a voucher code")
+      return
+    }
+
+    setIsRedeeming(true)
+    try {
+      const redeemed = await redeemDomainVoucher(normalizedCode)
+      setUser(redeemed.user)
+      setCode("")
+      toast.success("Voucher redeemed")
+      await loadBilling()
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to redeem voucher"
+      )
+    } finally {
+      setIsRedeeming(false)
+    }
+  }
+
+  async function handleCancelSubscription() {
+    setIsCancelling(true)
+    try {
+      const res = await fetch("/api/billing", { method: "DELETE" })
+      const data = (await res.json()) as BillingStatus & {
+        user?: typeof authUser
+        error?: string
+      }
+      if (!res.ok) throw new Error(data.error ?? "Failed to cancel subscription")
+      setStatus(data)
+      if (data.user) setUser(data.user)
+      setCancelConfirmOpen(false)
+      toast.success("Subscription cancelled")
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to cancel subscription"
+      )
+    } finally {
+      setIsCancelling(false)
+    }
+  }
+
+  const subscription = status?.subscription
+
+  return (
+    <div className="flex min-w-0 flex-col gap-4">
+      <div className="min-w-0 rounded-lg border p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">Subscription</p>
+            <p className="text-sm text-muted-foreground">
+              {isLoading
+                ? "Loading..."
+                : subscription?.isPremium
+                  ? `Active until ${formatDateTime(subscription.premiumUntil)}`
+                  : "No active subscription"}
+            </p>
+          </div>
+          <Badge variant={subscription?.isPremium ? "default" : "outline"}>
+            {subscription?.isPremium ? "Premium" : "Free"}
+          </Badge>
+        </div>
+        <Separator className="my-3" />
+        <p className="text-sm text-muted-foreground">
+          Private domains used: {subscription?.privateDomainUsage ?? 0}/
+          {subscription?.privateDomainLimit ?? 0}
+        </p>
+      </div>
+
+      {subscription?.isPremium ? (
+        <>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={isCancelling}
+            onClick={() => setCancelConfirmOpen(true)}
+          >
+            Cancel Subscription
+          </Button>
+          <Dialog
+            open={cancelConfirmOpen}
+            onOpenChange={setCancelConfirmOpen}
+          >
+            <DialogContent className="p-0 sm:max-w-sm">
+              <DialogHeader className="px-4 pt-4">
+                <DialogTitle>Cancel Subscription?</DialogTitle>
+                <DialogDescription>
+                  Your premium access will end and private domains will become
+                  public again.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="gap-2 px-4 pb-4 sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isCancelling}
+                  onClick={() => setCancelConfirmOpen(false)}
+                >
+                  Keep Subscription
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={isCancelling}
+                  onClick={() => void handleCancelSubscription()}
+                >
+                  {isCancelling ? <Spinner /> : null}
+                  Cancel Subscription
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+      ) : (
+        <form onSubmit={handleRedeem} className="flex flex-col gap-3">
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="billing-voucher-code">
+                Redeem Voucher
+              </FieldLabel>
+              <Input
+                id="billing-voucher-code"
+                value={code}
+                disabled={isRedeeming}
+                placeholder="Enter voucher code"
+                onChange={(event) => setCode(event.target.value.toUpperCase())}
+              />
+              <FieldDescription>
+                Redeeming a voucher activates premium and private domain quota.
+              </FieldDescription>
+            </Field>
+          </FieldGroup>
+          <Button type="submit" disabled={isRedeeming}>
+            {isRedeeming ? <Spinner /> : <GiftIcon data-icon="inline-start" />}
+            Redeem Voucher
+          </Button>
+        </form>
+      )}
+    </div>
+  )
+}
+
+function BillingSurface({
+  open,
+  onOpenChange,
+  isMobile,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  isMobile: boolean
+}) {
+  const content = <BillingContent />
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange} direction="bottom">
+        <DrawerContent>
+          <DrawerHeader className="px-4 pt-4">
+            <DrawerTitle>Billing</DrawerTitle>
+            <DrawerDescription>
+              Manage subscription and redeem vouchers.
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="px-4 pb-4">{content}</div>
+        </DrawerContent>
+      </Drawer>
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="p-0 sm:max-w-md">
+        <DialogHeader className="px-4 pt-4">
+          <DialogTitle>Billing</DialogTitle>
+          <DialogDescription>
+            Manage subscription and redeem vouchers.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="px-4 pb-4">{content}</div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function parseIpLines(value: string) {
+  return value
+    .split(/\r?\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function ApiKeyContent({ open }: { open: boolean }) {
+  const authUser = useAuthStore((state) => state.user)
+  const setUser = useAuthStore((state) => state.setUser)
+  const [generatedKey, setGeneratedKey] = React.useState("")
+  const [allowAllIps, setAllowAllIps] = React.useState(
+    authUser?.apiKeyAllowAllIps ?? true
+  )
+  const [allowedIps, setAllowedIps] = React.useState(
+    authUser?.apiKeyAllowedIps?.join("\n") ?? ""
+  )
+  const [blockedIps, setBlockedIps] = React.useState(
+    authUser?.apiKeyBlockedIps?.join("\n") ?? ""
+  )
+  const [isGenerating, setIsGenerating] = React.useState(false)
+  const [isLoadingKey, setIsLoadingKey] = React.useState(false)
+  const [isSaving, setIsSaving] = React.useState(false)
+  const isPremium = Boolean(authUser?.isPremium && authUser.premiumUntil)
+
+  React.useEffect(() => {
+    if (!open || !isPremium) return
+
+    let cancelled = false
+
+    async function loadApiKey() {
+      setIsLoadingKey(true)
+      try {
+        const data = await getApiKey()
+        if (cancelled) return
+        setGeneratedKey(data.apiKey ?? "")
+        setUser(data.user)
+        setAllowAllIps(data.user.apiKeyAllowAllIps)
+        setAllowedIps(data.user.apiKeyAllowedIps.join("\n"))
+        setBlockedIps(data.user.apiKeyBlockedIps.join("\n"))
+      } catch {
+        if (!cancelled) setGeneratedKey("")
+      } finally {
+        if (!cancelled) setIsLoadingKey(false)
+      }
+    }
+
+    void loadApiKey()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isPremium, open, setUser])
+
+  async function handleGenerate() {
+    setIsGenerating(true)
+    try {
+      const data = await generateApiKey()
+      setGeneratedKey(data.apiKey)
+      setUser(data.user)
+      toast.success("API key generated")
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to generate API key"
+      )
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  async function handleSaveAccess() {
+    setIsSaving(true)
+    try {
+      const data = await updateApiKeyAccess({
+        allowAllIps,
+        allowedIps: parseIpLines(allowedIps),
+        blockedIps: parseIpLines(blockedIps),
+      })
+      setUser(data.user)
+      toast.success("API key access updated")
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update API key"
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="flex min-w-0 flex-col gap-4">
+      {!isPremium ? (
+        <p className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+          Premium subscription is required to generate and use API keys.
+        </p>
+      ) : null}
+      <div className="min-w-0 rounded-lg border p-4">
+        <p className="text-sm font-medium">Current API key</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {authUser?.apiKeyPrefix
+            ? `Prefix: ${authUser.apiKeyPrefix}...`
+            : "No API key generated yet."}
+        </p>
+        {isLoadingKey ? (
+          <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+            <Spinner className="size-4" />
+            Loading API key...
+          </div>
+        ) : generatedKey ? (
+          <div className="mt-3 grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-lg border bg-muted/30 p-2">
+            <code className="block min-w-0 max-w-full overflow-hidden break-all rounded-md bg-background/40 px-2 py-1.5 font-mono text-xs leading-relaxed whitespace-pre-wrap">
+              {generatedKey}
+            </code>
+            <CopyButton
+              text={generatedKey}
+              className="size-8 shrink-0"
+              label="Copy API key"
+              successMessage="API key copied"
+              errorMessage="Failed to copy API key"
+            />
+          </div>
+        ) : authUser?.apiKeyPrefix ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            This API key cannot be shown in full. Generate a new API key to view
+            and copy it here.
+          </p>
+        ) : null}
+        <Button
+          type="button"
+          className="mt-3"
+          disabled={!isPremium || isGenerating}
+          onClick={() => void handleGenerate()}
+        >
+          {isGenerating ? <Spinner /> : <KeyRoundIcon data-icon="inline-start" />}
+          Generate API Key
+        </Button>
+      </div>
+      <FieldGroup>
+        <Field>
+          <label className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+            <span>Use API key from all IPs</span>
+            <input
+              type="checkbox"
+              checked={allowAllIps}
+              disabled={!isPremium || isSaving}
+              onChange={(event) => setAllowAllIps(event.target.checked)}
+            />
+          </label>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="api-allowed-ips">Whitelist IP</FieldLabel>
+          <Textarea
+            id="api-allowed-ips"
+            value={allowedIps}
+            disabled={!isPremium || allowAllIps || isSaving}
+            placeholder={"1.1.1.1\n8.8.8.8"}
+            onChange={(event) => setAllowedIps(event.target.value)}
+          />
+          <FieldDescription>
+            One IP per line. Disabled while all IPs are allowed.
+          </FieldDescription>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="api-blocked-ips">Blacklist IP</FieldLabel>
+          <Textarea
+            id="api-blocked-ips"
+            value={blockedIps}
+            disabled={!isPremium || isSaving}
+            placeholder={"192.0.2.1\n203.0.113.10"}
+            onChange={(event) => setBlockedIps(event.target.value)}
+          />
+          <FieldDescription>One IP per line.</FieldDescription>
+        </Field>
+      </FieldGroup>
+      <Button
+        type="button"
+        variant="outline"
+        disabled={!isPremium || isSaving}
+        onClick={() => void handleSaveAccess()}
+      >
+        {isSaving ? <Spinner /> : null}
+        Save API Key Access
+      </Button>
+    </div>
+  )
+}
+
+function ApiKeySurface({
+  open,
+  onOpenChange,
+  isMobile,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  isMobile: boolean
+}) {
+  const content = <ApiKeyContent open={open} />
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange} direction="bottom">
+        <DrawerContent>
+          <DrawerHeader className="px-4 pt-4">
+            <DrawerTitle>Apikey</DrawerTitle>
+            <DrawerDescription>
+              Generate API keys and configure IP access.
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="min-w-0 px-4 pb-4">{content}</div>
+        </DrawerContent>
+      </Drawer>
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[calc(100vw-2rem)] overflow-hidden p-0 sm:max-w-md">
+        <DialogHeader className="px-4 pt-4">
+          <DialogTitle>Apikey</DialogTitle>
+          <DialogDescription>
+            Generate API keys and configure IP access.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="min-w-0 px-4 pb-4">{content}</div>
       </DialogContent>
     </Dialog>
   )
