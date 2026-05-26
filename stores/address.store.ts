@@ -10,6 +10,7 @@ interface AddressStore {
   setAddresses: (addresses: GeneratedAddress[]) => void
   setLoaded: () => void
   addAddress: (address: GeneratedAddress) => void
+  addAddressAndSetActive: (address: GeneratedAddress) => void
   updateAddress: (id: string, partial: Partial<GeneratedAddress>) => void
   removeAddress: (id: string) => void
   setActiveAddress: (id: string | null) => void
@@ -57,6 +58,16 @@ export const useAddressStore = create<AddressStore>()(
             ),
             address,
           ],
+        })),
+      addAddressAndSetActive: (address) =>
+        set((state) => ({
+          addresses: [
+            ...state.addresses.filter(
+              (currentAddress) => currentAddress.domainId !== address.domainId
+            ),
+            address,
+          ],
+          activeAddressId: address.id,
         })),
       updateAddress: (id, partial) =>
         set((state) => ({

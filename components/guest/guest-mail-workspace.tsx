@@ -10,6 +10,7 @@ import {
   XIcon,
   AstroidIcon,
 } from "lucide-react"
+import { useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 
 import CopyButton from "@/components/shared/copy-button"
@@ -35,7 +36,6 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
@@ -43,7 +43,10 @@ import { Spinner } from "@/components/ui/spinner"
 import { isValidDomain, normalizeDomain } from "@/lib/domain-validation"
 import { resolveDomainSource } from "@/lib/domain-source"
 import { cn } from "@/lib/utils"
-import { formatRelativeInboxTime, parseInboxSender } from "@/lib/inbox"
+import {
+  formatRelativeInboxTime,
+  parseInboxSender,
+} from "@/lib/inbox"
 import { generateAddress } from "@/services/address.service"
 import type { BackendDomainStatus } from "@/services/backend.service"
 import { getDomains } from "@/services/domain.service"
@@ -52,6 +55,7 @@ import { useAuthStore } from "@/stores/auth.store"
 import { useAuroraStore } from "@/stores/aurora.store"
 import { useDomainStore } from "@/stores/domain.store"
 import { useInboxStore } from "@/stores/inbox.store"
+import { useCopy } from "@/hooks/use-copy"
 import type {
   Domain,
   EmailDetail,
@@ -161,6 +165,26 @@ function getAddressDomain(address: string) {
   return address.split("@")[1]?.trim().toLowerCase() ?? ""
 }
 
+function normalizeEmailAddress(value: string) {
+  const trimmed = value.trim().toLowerCase()
+  const atIndex = trimmed.lastIndexOf("@")
+  if (atIndex <= 0) return null
+
+  const localPart = trimmed.slice(0, atIndex).trim()
+  const domainPart = normalizeDomain(trimmed.slice(atIndex + 1))
+
+  if (!localPart || /\s/.test(localPart) || localPart.includes("@")) {
+    return null
+  }
+  if (!domainPart || !isValidDomain(domainPart)) return null
+
+  return {
+    address: `${localPart}@${domainPart}`,
+    domainPart,
+    localPart,
+  }
+}
+
 async function fetchDomainStatus(domain: string) {
   return fetchJsonWithTimeout<BackendDomainStatus>(
     `/api/domains/status?domain=${encodeURIComponent(domain)}`
@@ -184,6 +208,67 @@ function findMatchingDomain(domainPart: string, domains: Domain[]) {
         normalizedPart.endsWith(`.${normalizedName}`)
       )
     }) ?? null
+}
+
+function getDomainLookupCandidates(domainPart: string) {
+  const normalizedPart = normalizeDomain(domainPart)
+  if (!normalizedPart) return []
+
+  const labels = normalizedPart.split(".").filter(Boolean)
+  const candidates: string[] = []
+
+  for (let index = 0; index <= labels.length - 2; index += 1) {
+    candidates.push(labels.slice(index).join("."))
+  }
+
+  return candidates
+}
+
+async function fetchBestDomainStatus(domainPart: string) {
+  const candidates = getDomainLookupCandidates(domainPart)
+  let fallbackStatus: BackendDomainStatus | null = null
+
+  for (const candidate of candidates) {
+    try {
+      const status = await fetchDomainStatus(candidate)
+      fallbackStatus ??= status
+
+      if (status.registered || status.visibility === "private") {
+        return status
+      }
+    } catch {
+      // Keep checking parent domains so wildcard subdomains can resolve
+      // to a registered private root domain.
+    }
+  }
+
+  return fallbackStatus
+}
+
+function getGuestDomainAccessMessage(
+  status: BackendDomainStatus | null,
+  fallbackDomain?: string
+) {
+  if (isRegisteredPrivateDomain(status)) {
+    return "This domain is registered for private use only. Please contact the domain owner to request access."
+  }
+
+  const domain = status?.domain ?? fallbackDomain
+  const requiredMx = status?.required_mx
+
+  if (!status || !status.active || !status.approved || !status.mx_valid) {
+    return requiredMx
+      ? `This domain is not available yet. Please set the MX record for ${domain ?? "this domain"} to ${requiredMx} first, then try again.`
+      : "This domain is not available yet. Please set the correct MX record first, then try again."
+  }
+
+  return "This domain is registered and cannot be used by guests. Please contact the domain owner to request access."
+}
+
+function isRegisteredPrivateDomain(status: BackendDomainStatus | null) {
+  if (!status?.registered) return false
+
+  return status.visibility === null || status.visibility === "private"
 }
 
 async function fetchJsonWithTimeout<T>(
@@ -215,9 +300,15 @@ async function fetchJsonWithTimeout<T>(
   }
 }
 
-export default function GuestMailWorkspace() {
+export default function GuestMailWorkspace({
+  initialEmail,
+}: {
+  initialEmail?: string
+}) {
+  const searchParams = useSearchParams()
   const addresses = useAddressStore((state) => state.addresses)
   const activeAddressId = useAddressStore((state) => state.activeAddressId)
+  const addressLoaded = useAddressStore((state) => state.isLoaded)
   const removeExpired = useAddressStore((state) => state.removeExpired)
   const readIds = useInboxStore((state) => state.readIds)
   const markRead = useInboxStore((state) => state.markRead)
@@ -225,6 +316,9 @@ export default function GuestMailWorkspace() {
   const domains = useDomainStore((state) => state.domains)
   const setDomains = useDomainStore((state) => state.setDomains)
   const addAddress = useAddressStore((state) => state.addAddress)
+  const addAddressAndSetActive = useAddressStore(
+    (state) => state.addAddressAndSetActive
+  )
   const updateAddress = useAddressStore((state) => state.updateAddress)
   const setActiveAddress = useAddressStore((state) => state.setActiveAddress)
   const user = useAuthStore((state) => state.user)
@@ -253,7 +347,9 @@ export default function GuestMailWorkspace() {
   const prevEmailCountRef = useRef(0)
   const autoAddressPromiseRef = useRef<Promise<GeneratedAddress> | null>(null)
   const domainLoadStartedRef = useRef(false)
+  const appliedUrlEmailRef = useRef<string | null>(null)
   const triggerAurora = useAuroraStore((state) => state.trigger)
+  const { copy: copyToClipboard } = useCopy()
 
   useEffect(() => {
     removeExpired()
@@ -321,6 +417,109 @@ export default function GuestMailWorkspace() {
   }, [setDomains])
 
   const publicDomains = useMemo(() => getPublicDomains(domains), [domains])
+  const requestedEmail = initialEmail ?? searchParams.get("email")
+  const hasRequestedEmail = Boolean(requestedEmail)
+
+  useEffect(() => {
+    if (!addressLoaded || isLoadingDomains) return
+
+    const emailParam = requestedEmail
+    if (!emailParam || appliedUrlEmailRef.current === emailParam) return
+
+    const cleanUrl = () => {
+      if (typeof window === "undefined") return
+      if (initialEmail || window.location.search.includes("email=")) {
+        window.history.replaceState(null, "", "/")
+      }
+    }
+
+    const parsed = normalizeEmailAddress(emailParam)
+    if (!parsed) {
+      appliedUrlEmailRef.current = emailParam
+      cleanUrl()
+      toast.error("Invalid email URL")
+      return
+    }
+
+    const matchedDomain = findMatchingDomain(parsed.domainPart, publicDomains)
+    if (!matchedDomain) {
+      const existingAddress = addresses.find(
+        (address) =>
+          address.address.toLowerCase() === parsed.address &&
+          isAddressAvailable(address)
+      )
+
+      if (existingAddress) {
+        resetInbox()
+        setActiveAddress(existingAddress.id)
+        appliedUrlEmailRef.current = emailParam
+        cleanUrl()
+        return
+      }
+
+      const now = new Date()
+      const address: GeneratedAddress = {
+        id: `url:${parsed.address}`,
+        address: parsed.address,
+        domainId: `url:${parsed.domainPart}`,
+        domainName: parsed.domainPart,
+        username: null,
+        createdAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+      }
+
+      resetInbox()
+      addAddressAndSetActive(address)
+      appliedUrlEmailRef.current = emailParam
+      cleanUrl()
+      void fetchBestDomainStatus(parsed.domainPart).then((status) => {
+        toast.error(getGuestDomainAccessMessage(status, parsed.domainPart))
+      })
+      return
+    }
+
+    const existingAddress = addresses.find(
+      (address) =>
+        address.address.toLowerCase() === parsed.address &&
+        isAddressAvailable(address)
+    )
+
+    if (existingAddress) {
+      resetInbox()
+      setActiveAddress(existingAddress.id)
+      appliedUrlEmailRef.current = emailParam
+      cleanUrl()
+      return
+    }
+
+    const now = new Date()
+    const address: GeneratedAddress = {
+      id: `url:${parsed.address}`,
+      address: parsed.address,
+      domainId: matchedDomain.id,
+      domainName: matchedDomain.name,
+      username: null,
+      createdAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+    }
+
+    resetInbox()
+    addAddressAndSetActive(address)
+    appliedUrlEmailRef.current = emailParam
+    cleanUrl()
+  }, [
+    addAddress,
+    addAddressAndSetActive,
+    addressLoaded,
+    addresses,
+    initialEmail,
+    isLoadingDomains,
+    publicDomains,
+    resetInbox,
+    requestedEmail,
+    searchParams,
+    setActiveAddress,
+  ])
 
   const activeAddress = useMemo(
     () =>
@@ -339,8 +538,10 @@ export default function GuestMailWorkspace() {
       activeAddressDomain &&
       !findMatchingDomain(activeAddressDomain, publicDomains)
   )
-  const privateDomainMessage =
-    "This domain is private. Please contact the domain owner to request access."
+  const domainAccessMessage = getGuestDomainAccessMessage(
+    domainStatus,
+    activeAddressDomain
+  )
   const inboxRefreshMs = useMemo(() => {
     if (isBackendWebSocketConnected) return WEBSOCKET_CONNECTED_REFRESH_MS
 
@@ -365,7 +566,7 @@ export default function GuestMailWorkspace() {
       setDomainStatusError(null)
 
       try {
-        const status = await fetchDomainStatus(activeAddressDomain)
+        const status = await fetchBestDomainStatus(activeAddressDomain)
         if (!cancelled) setDomainStatus(status)
       } catch (error) {
         if (!cancelled) {
@@ -390,6 +591,8 @@ export default function GuestMailWorkspace() {
 
   useEffect(() => {
     if (!authLoaded) return
+    if (!addressLoaded) return
+    if (hasRequestedEmail && appliedUrlEmailRef.current !== requestedEmail) return
     if (!user && appSettings?.allowGuestAddresses === false) return
     if (activeAddress) return
 
@@ -439,10 +642,13 @@ export default function GuestMailWorkspace() {
   }, [
     activeAddress,
     addAddress,
+    addressLoaded,
     addresses,
     authLoaded,
+    hasRequestedEmail,
     appSettings,
     publicDomains,
+    requestedEmail,
     resetInbox,
     setActiveAddress,
     user,
@@ -460,7 +666,7 @@ export default function GuestMailWorkspace() {
       setEmails([])
       setExpandedEmailId(null)
       setEmailDetails({})
-      setError(privateDomainMessage)
+      setError(domainAccessMessage)
       return
     }
 
@@ -487,7 +693,7 @@ export default function GuestMailWorkspace() {
     } finally {
       setIsLoading(false)
     }
-  }, [activeAddress, activeDomainUnavailable, privateDomainMessage, readIds])
+  }, [activeAddress, activeDomainUnavailable, domainAccessMessage, readIds])
 
   async function handleDeleteAllMessages() {
     if (!activeAddress || isDeletingMessages) return
@@ -611,10 +817,8 @@ export default function GuestMailWorkspace() {
     }
   }
 
-  async function handleGenerateRandomAddress(withSubdomain: boolean) {
+  async function handleGenerateRandomAddress() {
     setIsWillcardLoading(true)
-    const shouldUseSubdomain =
-      withSubdomain && appSettings?.allowWildcardSubdomains !== false
     try {
       if (publicDomains.length === 0) {
         toast.error("No domains available")
@@ -627,16 +831,10 @@ export default function GuestMailWorkspace() {
         { length: 6 },
         () => chars[Math.floor(Math.random() * chars.length)]
       ).join("")
-      const randomSub = Array.from(
-        { length: 5 },
-        () => chars[Math.floor(Math.random() * chars.length)]
-      ).join("")
       const now = new Date()
       const address: GeneratedAddress = {
         id: `local_${Date.now()}`,
-        address: shouldUseSubdomain
-          ? `${randomLocal}@${randomSub}.${picked.name}`
-          : `${randomLocal}@${picked.name}`,
+        address: `${randomLocal}@${picked.name}`,
         domainId: picked.id,
         domainName: picked.name,
         username: null,
@@ -646,11 +844,9 @@ export default function GuestMailWorkspace() {
       resetInbox()
       addAddress(address)
       setActiveAddress(address.id)
-      toast.success(
-        shouldUseSubdomain ? "Wildcard address generated" : "Address generated"
-      )
+      toast.success("Address generated")
     } catch {
-      toast.error("Failed to enable wildcard subdomain")
+      toast.error("Failed to generate address")
     } finally {
       setIsWillcardLoading(false)
     }
@@ -658,10 +854,12 @@ export default function GuestMailWorkspace() {
 
   const [searchQuery, setSearchQuery] = useState("")
   const [isMac, setIsMac] = useState(false)
+  const [siteOrigin, setSiteOrigin] = useState("")
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setIsMac(navigator.platform.toLowerCase().includes("mac"))
+    setSiteOrigin(window.location.origin)
   }, [])
 
   useEffect(() => {
@@ -744,9 +942,16 @@ export default function GuestMailWorkspace() {
       const matchedDomain = findMatchingDomain(domainPart, publicDomains)
 
       if (!matchedDomain) {
-        rejectAddressEdit(
-          "This domain is private or unavailable. Please contact the domain owner to request access."
-        )
+        updateAddress(activeAddress.id, {
+          address: `${localPart}@${domainPart}`,
+          domainId: `url:${domainPart}`,
+          domainName: domainPart,
+        })
+        resetInbox()
+        setEmails([])
+        setExpandedEmailId(null)
+        setEmailDetails({})
+        setEditAddress(null)
         return
       }
 
@@ -755,6 +960,7 @@ export default function GuestMailWorkspace() {
         domainId: matchedDomain.id,
         domainName: matchedDomain.name,
       })
+      resetInbox()
       setEditAddress(null)
     } catch (error) {
       toast.error(
@@ -765,75 +971,103 @@ export default function GuestMailWorkspace() {
     }
   }
 
-  const [useSubdomain, setUseSubdomain] = useState(false)
   const [isWillcardLoading, setIsWillcardLoading] = useState(false)
+  const activeAddressHref = activeAddress
+    ? `/${activeAddress.address}`
+    : ""
+  const activeAddressPublicUrl =
+    activeAddress && siteOrigin ? `${siteOrigin}${activeAddressHref}` : ""
+
+  async function handleCopyPublicUrl() {
+    if (!activeAddressPublicUrl) return
+
+    try {
+      await copyToClipboard(activeAddressPublicUrl)
+      toast.success("Email URL copied")
+    } catch {
+      toast.error("Failed to copy email URL")
+    }
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col justify-center gap-4">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 rounded-xl border bg-card p-4 text-card-foreground shadow">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 rounded-xl border bg-card p-5 text-card-foreground shadow">
         {activeAddress ? (
           <>
-            <div className="flex items-center gap-2 rounded-lg border bg-muted py-2 ps-4 pe-2">
-              {editAddress ? (
-                <div className="flex min-w-0 flex-1 items-center gap-0 sm:text-lg">
-                  <input
-                    type="text"
-                    value={editAddressValue}
-                    onChange={(e) => setEditAddressValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") void saveAddressEdit()
-                      if (e.key === "Escape") setEditAddress(null)
-                    }}
-                    onBlur={() => void saveAddressEdit()}
-                    className="min-w-0 flex-1 bg-transparent outline-hidden"
-                    placeholder="local@domain.com atau domain.com"
-                    disabled={isSavingAddressEdit}
-                    autoFocus
-                  />
-                </div>
-              ) : (
-                <span
-                  className="min-w-0 flex-1 cursor-text truncate sm:text-xl"
-                  onClick={() => startAddressEdit()}
-                >
-                  {activeAddress.address}
-                </span>
-              )}
-              <Card className="rounded-md px-4 py-0 text-primary dark:text-foreground">
-                <CopyButton text={activeAddress.address} className="size-10" />
-              </Card>
+            <div className="space-y-2 text-center">
+              <h1 className="text-2xl font-semibold tracking-normal text-foreground sm:text-3xl">
+                Premiumisme - Email
+              </h1>
+              <p className="text-sm text-muted-foreground sm:text-base">
+                Create temporary email easily, quickly, and practically.
+              </p>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="hidden sm:block">
-                <DomainAddressSwitcher hideGenerate />
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-2">
+              <div className="flex h-10 min-w-0 items-center rounded-md border bg-background">
+                {editAddress ? (
+                  <div className="flex min-w-0 flex-1 items-center gap-0 px-3 sm:text-lg">
+                    <input
+                      type="text"
+                      value={editAddressValue}
+                      onChange={(e) => setEditAddressValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void saveAddressEdit()
+                        if (e.key === "Escape") setEditAddress(null)
+                      }}
+                      onBlur={() => void saveAddressEdit()}
+                      className="min-w-0 flex-1 bg-transparent text-center outline-hidden"
+                      placeholder="local@domain.com or domain.com"
+                      disabled={isSavingAddressEdit}
+                      autoFocus
+                    />
+                  </div>
+                ) : (
+                  <span
+                    className="min-w-0 flex-1 cursor-text truncate px-3 text-center text-base font-medium sm:text-xl"
+                    onClick={() => startAddressEdit()}
+                  >
+                    {activeAddress.address}
+                  </span>
+                )}
               </div>
-              <div className="flex h-10 items-center justify-between gap-3 rounded-md border px-4">
-                <span className="text-sm font-medium">Wildcard Domain</span>
-                <Switch
-                  aria-label="Wildcard Domain"
-                  checked={useSubdomain}
-                  disabled={appSettings?.allowWildcardSubdomains === false}
-                  onCheckedChange={setUseSubdomain}
-                />
-              </div>
+              <DomainAddressSwitcher hideGenerate trigger="icon" />
               <Button
                 type="button"
                 variant="outline"
-                size="lg"
+                size="icon-lg"
+                aria-label="Generate new email address"
                 disabled={!activeAddress || isWillcardLoading}
-                onClick={() => void handleGenerateRandomAddress(useSubdomain)}
-                className="w-full justify-start gap-2"
+                onClick={() => void handleGenerateRandomAddress()}
               >
                 {isWillcardLoading ? (
                   <Spinner className="size-4" />
                 ) : (
                   <AstroidIcon className="size-4" />
                 )}
-                New Address
               </Button>
+              <CopyButton
+                text={activeAddress.address}
+                className="size-10 rounded-md border text-primary dark:text-foreground"
+              />
             </div>
+            {activeAddressPublicUrl ? (
+              <button
+                type="button"
+                className="text-center text-sm leading-relaxed text-muted-foreground hover:text-foreground hover:underline"
+                onClick={() => void handleCopyPublicUrl()}
+              >
+                {activeAddressPublicUrl}
+              </button>
+            ) : null}
             {activeDomainUnavailable ? (
-              <PrivateDomainNotice message={privateDomainMessage} />
+              <PrivateDomainNotice
+                isPrivate={
+                  Boolean(domainStatus?.registered) &&
+                  domainStatus?.visibility === "private"
+                }
+                isLoading={isLoadingDomainStatus}
+                message={domainAccessMessage}
+              />
             ) : (
               <DomainStatusSummary
                 domain={activeAddressDomain}
@@ -1069,7 +1303,7 @@ function DomainStatusSummary({
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+      <div className="flex items-center justify-center gap-2 text-center text-sm text-muted-foreground">
         <Spinner className="size-4" />
         <span>Checking domain status for {domain}...</span>
       </div>
@@ -1078,43 +1312,68 @@ function DomainStatusSummary({
 
   if (error) {
     return (
-      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
-        <Badge variant="destructive">Status unknown</Badge>
-        <span className="min-w-0 text-muted-foreground">{error}</span>
+      <div className="space-y-1 text-center text-sm">
+        <div className="font-medium text-[#fb2c36]">Email not supported</div>
+        <div className="text-[#fb2c36]">{error}</div>
       </div>
     )
   }
 
   if (!status) return null
 
-  const isValid = status.active && status.approved && status.mx_valid
+  const isValid =
+    status.active &&
+    status.approved &&
+    status.mx_valid &&
+    !isRegisteredPrivateDomain(status)
   const uptime = status.uptime_label ?? `${status.uptime_days} days`
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
-      <span className="min-w-0 truncate font-medium">{status.domain}</span>
-      <Badge
-        variant={isValid ? "default" : "destructive"}
-        className={cn(isValid && "bg-emerald-600 text-white")}
+    <div className="space-y-1 text-center text-sm">
+      <div
+        className={cn(
+          "font-medium",
+          isValid ? "text-emerald-500" : "text-[#fb2c36]"
+        )}
       >
-        {status.approved ? "Approved" : "Not approved"}
-      </Badge>
-      <Badge variant={status.active ? "outline" : "destructive"}>
-        {status.active ? "Active" : "Inactive"}
-      </Badge>
-      <Badge variant={status.mx_valid ? "outline" : "destructive"}>
-        {status.mx_valid ? "MX valid" : "MX invalid"}
-      </Badge>
-      <span className="text-muted-foreground">Uptime {uptime}</span>
+        {isValid ? `Email approved (uptime ${uptime})` : "Email not supported"}
+      </div>
+      {!isValid ? (
+        <div className="text-[#fb2c36]">
+          {getGuestDomainAccessMessage(status, domain)}
+        </div>
+      ) : null}
     </div>
   )
 }
 
-function PrivateDomainNotice({ message }: { message: string }) {
+function PrivateDomainNotice({
+  isPrivate,
+  isLoading,
+  message,
+}: {
+  isPrivate: boolean
+  isLoading: boolean
+  message: string
+}) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center gap-2 text-center text-sm text-muted-foreground">
+        <Spinner className="size-4" />
+        <span>Checking domain status...</span>
+      </div>
+    )
+  }
+
   return (
-    <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm">
-      <div className="font-medium text-destructive">Private domain</div>
-      <div className="text-muted-foreground">{message}</div>
+    <div className="space-y-1 text-center text-sm">
+      <div className="font-medium text-[#fb2c36]">
+        Email not supported
+      </div>
+      <div className="text-[#fb2c36]">
+        {isPrivate ? "Private domain" : "Domain unavailable"}
+      </div>
+      <div className="text-[#fb2c36]">{message}</div>
     </div>
   )
 }
