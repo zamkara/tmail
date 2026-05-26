@@ -36,13 +36,16 @@ export default function RootLayout({
         fontSans.variable
       )}
     >
-      <body>
+      <body className="pb-10">
         <ThemeProvider>
           <AuthLoader />
           <InboxStateSync />
           <BackendInboxSync />
           <TooltipProvider>
             {children}
+            <footer className="fixed inset-x-0 bottom-0 z-40 px-4 py-3 text-center text-xs text-muted-foreground">
+              © 2026 Premiumisme. All rights reserved.
+            </footer>
             <AdminSessionDialog />
           </TooltipProvider>
           <Toaster />

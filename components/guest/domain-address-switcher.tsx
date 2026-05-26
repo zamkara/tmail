@@ -1,7 +1,13 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { GlobeIcon, MailIcon, RefreshCwIcon, SearchIcon } from "lucide-react"
+import {
+  ChevronDownIcon,
+  GlobeIcon,
+  MailIcon,
+  RefreshCwIcon,
+  SearchIcon,
+} from "lucide-react"
 import { Command as CommandPrimitive } from "cmdk"
 import { toast } from "sonner"
 
@@ -55,10 +61,12 @@ function findReusableAddress(addresses: GeneratedAddress[], domainId: string) {
 
 interface DomainAddressSwitcherProps {
   hideGenerate?: boolean
+  trigger?: "full" | "icon"
 }
 
 export default function DomainAddressSwitcher({
   hideGenerate,
+  trigger = "full",
 }: DomainAddressSwitcherProps) {
   const [open, setOpen] = useState(false)
   const [isLoadingDomains, setIsLoadingDomains] = useState(true)
@@ -197,27 +205,49 @@ export default function DomainAddressSwitcher({
 
   return (
     <>
-      <div className="flex w-full max-w-full items-center gap-1">
-        <Button
-          type="button"
-          variant="default"
-          size="lg"
-          className="min-w-0 flex-1"
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          onClick={() => setOpen(true)}
-          disabled={isLoadingDomains}
-        >
-          {isLoadingDomains ? <Spinner data-icon="inline-start" /> : null}
-          <span className="min-w-0 flex-1 truncate text-left">
-            {isLoadingDomains
-              ? "Loading domains..."
-              : (activeAddress?.address ?? "Select address")}
-          </span>
-          {!isLoadingDomains ? (
-            <MailIcon className="size-4" data-icon="inline-end" />
-          ) : null}
-        </Button>
+      <div
+        className={
+          trigger === "icon"
+            ? "flex shrink-0 items-center"
+            : "flex w-full max-w-full items-center gap-1"
+        }
+      >
+        {trigger === "icon" ? (
+          <Button
+            type="button"
+            variant="default"
+            size="icon-lg"
+            className="shrink-0"
+            aria-label="Select email domain"
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            onClick={() => setOpen(true)}
+            disabled={isLoadingDomains}
+          >
+            {isLoadingDomains ? <Spinner /> : <ChevronDownIcon />}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="default"
+            size="lg"
+            className="min-w-0 flex-1"
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            onClick={() => setOpen(true)}
+            disabled={isLoadingDomains}
+          >
+            {isLoadingDomains ? <Spinner data-icon="inline-start" /> : null}
+            <span className="min-w-0 flex-1 truncate text-left">
+              {isLoadingDomains
+                ? "Loading domains..."
+                : (activeAddress?.address ?? "Select address")}
+            </span>
+            {!isLoadingDomains ? (
+              <MailIcon className="size-4" data-icon="inline-end" />
+            ) : null}
+          </Button>
+        )}
         {!hideGenerate && (
           <Button
             type="button"

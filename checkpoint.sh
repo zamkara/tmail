@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-user-inbox-address-domain-controls"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-guest-email-share-status-footer"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,28 +28,29 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-feat: improve user inbox, address generation, and domain controls
+feat: improve guest email sharing, domain status, and footer
 
 Main changes:
-- align user inbox realtime behavior with guest inbox using websocket events and slower fallback polling
-- add delete-all message confirmation dialogs for desktop, mobile, and guest inbox flows
-- add OTP detection/copy action to user inbox message lists
-- add active-email breadcrumb copy support and message-id breadcrumb detail
-- add active address custom edit, delete, domain validity status, and same-domain generation actions
-- add manual domain picker and random-domain address generation from the active-address sidebar
-- add wildcard/subdomain address generation support for user-owned domains
-- add private-domain guest blocking so private domains cannot be opened from public guest flow
-- allow deleting user-owned domains and cleanup related active addresses
-- improve guest custom-email validation so invalid/private domains do not replace the current inbox
+- redesign guest email card with heading, share URL, compact domain picker, generate icon, and copy icon
+- add short guest email URL support such as `/name@domain.com`
+- keep invalid routes on the guest landing page instead of showing a 404 page
+- copy the short guest email URL from the URL label
+- apply shared guest email URLs to the active guest inbox and clean the browser URL back to `/`
+- keep pasted/custom guest emails visible even when the domain is private or MX is not ready
+- show red guest status messages for private, unavailable, or unsupported domains
+- merge app-domain visibility into `/api/domains/status` so private app domains do not appear approved for guests
+- add atomic active-address persistence for URL-based guest addresses
+- add global footer text: `© 2026 Premiumisme. All rights reserved.`
 
 Testing:
 - [x] `pnpm typecheck`
-- [ ] User inbox websocket update and fallback polling
-- [ ] Delete all messages on desktop, mobile, and guest inbox
-- [ ] OTP copy button on user inbox list
-- [ ] Active address create, random create, edit, delete, and same-domain generate
-- [ ] User domain private/public toggle, wildcard generate, and delete
-- [ ] Guest private-domain access rejection
+- [ ] Guest short email URL opens the guest page and applies the requested email
+- [ ] Guest short email URL refresh keeps the requested email active
+- [ ] Invalid guest URL redirects to the guest landing page
+- [ ] Private and unavailable domains show red status text
+- [ ] Valid public domains show email approved status
+- [ ] Guest URL label copies the short URL
+- [ ] Footer appears on all pages as text only
 EOF
 )
 
