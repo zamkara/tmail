@@ -22,6 +22,11 @@ import {
 } from "@/components/ui/command"
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import InboxCtaButton from "@/components/guest/inbox-cta-button"
 import { resolveDomainSource } from "@/lib/domain-source"
 import { generateAddress } from "@/services/address.service"
@@ -50,7 +55,12 @@ function sortDomains(domains: Domain[]) {
 }
 
 function getPublicDomains(domains: Domain[]) {
-  return domains.filter((domain) => domain.visibility !== "private")
+  return domains.filter(
+    (domain) =>
+      domain.visibility !== "private" &&
+      domain.isVerified !== false &&
+      domain.isBanned !== true
+  )
 }
 
 function findReusableAddress(addresses: GeneratedAddress[], domainId: string) {
@@ -72,6 +82,7 @@ export default function DomainAddressSwitcher({
   const [isLoadingDomains, setIsLoadingDomains] = useState(true)
   const [loadingDomainId, setLoadingDomainId] = useState<string | null>(null)
   const domains = useDomainStore((state) => state.domains)
+  const domainsLoaded = useDomainStore((state) => state.isLoaded)
   const setDomains = useDomainStore((state) => state.setDomains)
 
   const addresses = useAddressStore((state) => state.addresses)
@@ -88,6 +99,11 @@ export default function DomainAddressSwitcher({
   }, [removeExpired])
 
   useEffect(() => {
+    if (domainsLoaded) {
+      setIsLoadingDomains(false)
+      return
+    }
+
     let cancelled = false
 
     async function loadDomains() {
@@ -105,9 +121,6 @@ export default function DomainAddressSwitcher({
       } catch (error) {
         if (!cancelled) {
           console.error("Failed to load domains:", error)
-          toast.error(
-            error instanceof Error ? error.message : "Failed to load domains"
-          )
           setDomains([])
         }
       } finally {
@@ -122,7 +135,7 @@ export default function DomainAddressSwitcher({
     return () => {
       cancelled = true
     }
-  }, [setDomains])
+  }, [domainsLoaded, setDomains])
 
   const sortedDomains = useMemo(
     () => sortDomains(getPublicDomains(domains)),
@@ -213,56 +226,72 @@ export default function DomainAddressSwitcher({
         }
       >
         {trigger === "icon" ? (
-          <Button
-            type="button"
-            variant="default"
-            size="icon-lg"
-            className="shrink-0"
-            aria-label="Select email domain"
-            aria-haspopup="dialog"
-            aria-expanded={open}
-            onClick={() => setOpen(true)}
-            disabled={isLoadingDomains}
-          >
-            {isLoadingDomains ? <Spinner /> : <ChevronDownIcon />}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="default"
+                size="icon-lg"
+                className="shrink-0"
+                aria-label="Select email domain"
+                aria-haspopup="dialog"
+                aria-expanded={open}
+                onClick={() => setOpen(true)}
+                disabled={isLoadingDomains}
+              >
+                {isLoadingDomains ? <Spinner /> : <ChevronDownIcon />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Select email domain</TooltipContent>
+          </Tooltip>
         ) : (
-          <Button
-            type="button"
-            variant="default"
-            size="lg"
-            className="min-w-0 flex-1"
-            aria-haspopup="dialog"
-            aria-expanded={open}
-            onClick={() => setOpen(true)}
-            disabled={isLoadingDomains}
-          >
-            {isLoadingDomains ? <Spinner data-icon="inline-start" /> : null}
-            <span className="min-w-0 flex-1 truncate text-left">
-              {isLoadingDomains
-                ? "Loading domains..."
-                : (activeAddress?.address ?? "Select address")}
-            </span>
-            {!isLoadingDomains ? (
-              <MailIcon className="size-4" data-icon="inline-end" />
-            ) : null}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="default"
+                size="lg"
+                className="min-w-0 flex-1"
+                aria-label="Select email domain"
+                aria-haspopup="dialog"
+                aria-expanded={open}
+                onClick={() => setOpen(true)}
+                disabled={isLoadingDomains}
+              >
+                {isLoadingDomains ? <Spinner data-icon="inline-start" /> : null}
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {isLoadingDomains
+                    ? "Loading domains..."
+                    : (activeAddress?.address ?? "Select address")}
+                </span>
+                {!isLoadingDomains ? (
+                  <MailIcon className="size-4" data-icon="inline-end" />
+                ) : null}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Select email domain</TooltipContent>
+          </Tooltip>
         )}
         {!hideGenerate && (
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-lg"
-            aria-label="Generate random email address"
-            disabled={
-              isSelectingDomain ||
-              isLoadingDomains ||
-              sortedDomains.length === 0
-            }
-            onClick={() => void handleGenerateRandomAddress()}
-          >
-            {isSelectingDomain ? <Spinner /> : <RefreshCwIcon />}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-lg"
+                aria-label="Generate random email address"
+                disabled={
+                  isSelectingDomain ||
+                  isLoadingDomains ||
+                  sortedDomains.length === 0
+                }
+                onClick={() => void handleGenerateRandomAddress()}
+              >
+                {isSelectingDomain ? <Spinner /> : <RefreshCwIcon />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Generate random email address</TooltipContent>
+          </Tooltip>
         )}
       </div>
 

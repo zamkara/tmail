@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef } from "react"
 
-import { buildBackendWsUrl, getBackendBaseUrl } from "@/services/backend.service"
 import { useAddressStore } from "@/stores/address.store"
+
+const PUBLIC_EMAIL_WS_URL = process.env.NEXT_PUBLIC_EMAIL_WS_URL?.trim() ?? ""
 
 type BackendInboxUpdateDetail = {
   email?: string
@@ -28,12 +29,15 @@ export default function BackendInboxSync() {
   const socketRef = useRef<WebSocket | null>(null)
 
   const websocketUrl = useMemo(() => {
-    if (!activeAddress?.address) return null
-    const base = buildBackendWsUrl("/ws")
-    if (!base) return null
+    if (!activeAddress?.address || !PUBLIC_EMAIL_WS_URL) return null
 
     try {
+      const base = new URL(PUBLIC_EMAIL_WS_URL)
       const url = new URL(base)
+
+      if (url.protocol === "http:") url.protocol = "ws:"
+      if (url.protocol === "https:") url.protocol = "wss:"
+
       url.searchParams.set("email", activeAddress.address)
       return url.toString()
     } catch {
@@ -42,7 +46,7 @@ export default function BackendInboxSync() {
   }, [activeAddress?.address])
 
   useEffect(() => {
-    if (!websocketUrl || !getBackendBaseUrl()) {
+    if (!websocketUrl) {
       dispatchWebSocketStatus(activeAddress?.address ?? null, false)
       return
     }
@@ -80,14 +84,13 @@ export default function BackendInboxSync() {
         window.dispatchEvent(
           new CustomEvent("tmail:backend-inbox-update", {
             detail: {
-              email: payload?.email ?? activeAddress?.address ?? null,
+              email: payload?.email ?? email,
               message: payload?.message ?? null,
             },
           })
         )
       })
     } catch {
-      // Keep polling as the fallback if the websocket cannot connect.
       dispatchWebSocketStatus(email, false)
     }
 

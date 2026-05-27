@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import EmailOtpChip from "@/components/inbox/email-otp-chip"
 import type { EmailDetail } from "@/types"
 import { ScrollArea } from "../ui/scroll-area"
 
@@ -47,6 +48,7 @@ export default function EmailPreview({ email }: EmailPreviewProps) {
           <h1 className="text-2xl font-semibold tracking-normal">
             {email.subject}
           </h1>
+          <EmailOtpChip otp={email.otp} className="w-fit" />
           <div className="flex flex-col gap-1 text-sm text-muted-foreground">
             <p>
               From <span className="text-foreground">{senderName}</span> &lt;

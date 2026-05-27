@@ -10,7 +10,7 @@ export async function GET() {
 
   if (!baseUrl) {
     return NextResponse.json(
-      { error: "NEXT_PUBLIC_EMAIL_API_URL tidak dikonfigurasi" },
+      { error: "EMAIL_API_URL tidak dikonfigurasi" },
       { status: 503 }
     )
   }

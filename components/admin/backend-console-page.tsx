@@ -1,8 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import {
-  BookOpenIcon,
   GlobeIcon,
   Link2Icon,
   Loader2Icon,
@@ -11,9 +10,8 @@ import {
   ServerIcon,
   ShieldAlertIcon,
   Trash2Icon,
-  WebhookIcon,
+  FileTextIcon,
 } from "lucide-react"
-import Link from "next/link"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
@@ -34,15 +32,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
+import type {
   BackendDomainStatus,
   BackendHealth,
   BackendIncomingDomainsResponse,
   BackendSwaggerSpec,
   BackendSystemStatus,
-  buildBackendUrl,
-  fetchBackendJson,
-  getBackendBaseUrl,
 } from "@/services/backend.service"
 
 type SessionState = "checking" | "guest" | "admin"
@@ -68,12 +63,24 @@ function formatDuration(seconds: number | null | undefined) {
   return `${days}d`
 }
 
-function hostFromBaseUrl(baseUrl: string) {
-  try {
-    return new URL(baseUrl).host
-  } catch {
-    return baseUrl
+async function fetchInternalBackendJson<T>(path: string) {
+  const [pathname, query = ""] = path.split("?")
+  const params = new URLSearchParams(query)
+  params.set("path", pathname)
+
+  const res = await fetch(`/api/backend/public?${params.toString()}`, {
+    cache: "no-store",
+  })
+  const data = (await res.json().catch(() => null)) as
+    | (T & { error?: string })
+    | null
+
+  if (!res.ok) {
+    throw new Error(data?.error ?? `Request failed with status ${res.status}`)
   }
+
+  if (!data) throw new Error("Empty backend response")
+  return data
 }
 
 export default function BackendConsolePage() {
@@ -92,8 +99,6 @@ export default function BackendConsolePage() {
   const [incoming, setIncoming] =
     useState<BackendIncomingDomainsResponse | null>(null)
   const [incomingError, setIncomingError] = useState<string | null>(null)
-  const [incomingPage, setIncomingPage] = useState(1)
-  const [incomingLoading, setIncomingLoading] = useState(false)
   const [domainQuery, setDomainQuery] = useState("")
   const [domainStatus, setDomainStatus] = useState<BackendDomainStatus | null>(
     null
@@ -106,10 +111,6 @@ export default function BackendConsolePage() {
   const [purgeDomain, setPurgeDomain] = useState("")
   const [purgeMessageId, setPurgeMessageId] = useState("")
   const [purgeLoading, setPurgeLoading] = useState(false)
-
-  const backendBaseUrl = getBackendBaseUrl()
-  const swaggerUrl = useMemo(() => buildBackendUrl("/swagger"), [])
-  const websocketUrl = useMemo(() => buildBackendUrl("/ws"), [])
 
   useEffect(() => {
     let cancelled = false
@@ -143,7 +144,7 @@ export default function BackendConsolePage() {
 
     async function loadPublicBackendData() {
       try {
-        const data = await fetchBackendJson<BackendHealth>("/health")
+        const data = await fetchInternalBackendJson<BackendHealth>("/health")
         if (!cancelled) {
           setHealth(data)
           setHealthError(null)
@@ -159,9 +160,9 @@ export default function BackendConsolePage() {
 
       try {
         const [swaggerData, incomingData] = await Promise.all([
-          fetchBackendJson<BackendSwaggerSpec>("/swagger.json"),
-          fetchBackendJson<BackendIncomingDomainsResponse>(
-            `/list-domain?page=${incomingPage}&limit=20`
+          fetchInternalBackendJson<BackendSwaggerSpec>("/swagger.json"),
+          fetchInternalBackendJson<BackendIncomingDomainsResponse>(
+            `/random-domain?limit=20`
           ),
         ])
 
@@ -186,7 +187,7 @@ export default function BackendConsolePage() {
     return () => {
       cancelled = true
     }
-  }, [incomingPage])
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -224,13 +225,12 @@ export default function BackendConsolePage() {
   }, [])
 
   async function refreshAll() {
-    setIncomingLoading(true)
     try {
       const [healthData, swaggerData, incomingData] = await Promise.all([
-        fetchBackendJson<BackendHealth>("/health"),
-        fetchBackendJson<BackendSwaggerSpec>("/swagger.json"),
-        fetchBackendJson<BackendIncomingDomainsResponse>(
-          `/list-domain?page=${incomingPage}&limit=20`
+        fetchInternalBackendJson<BackendHealth>("/health"),
+        fetchInternalBackendJson<BackendSwaggerSpec>("/swagger.json"),
+        fetchInternalBackendJson<BackendIncomingDomainsResponse>(
+          `/random-domain?limit=20`
         ),
       ])
       setHealth(healthData)
@@ -244,8 +244,6 @@ export default function BackendConsolePage() {
       toast.error(
         error instanceof Error ? error.message : "Failed to refresh backend data"
       )
-    } finally {
-      setIncomingLoading(false)
     }
   }
 
@@ -260,9 +258,16 @@ export default function BackendConsolePage() {
     setDomainStatusLoading(true)
     setDomainStatusError(null)
     try {
-      const data = await fetchBackendJson<BackendDomainStatus>(
-        `/domains/status?domain=${encodeURIComponent(normalized)}`
+      const res = await fetch(
+        `/api/domains/status?domain=${encodeURIComponent(normalized)}`,
+        { cache: "no-store" }
       )
+      const data = (await res.json().catch(() => null)) as
+        | (BackendDomainStatus & { error?: string })
+        | null
+      if (!res.ok || !data) {
+        throw new Error(data?.error ?? "Failed to load domain status")
+      }
       setDomainStatus(data)
     } catch (error) {
       setDomainStatus(null)
@@ -395,29 +400,11 @@ export default function BackendConsolePage() {
               <Badge variant={health?.ok ? "outline" : "destructive"}>
                 {health?.ok ? "Backend healthy" : "Backend degraded"}
               </Badge>
-              {backendBaseUrl ? (
-                <Badge variant="outline">{hostFromBaseUrl(backendBaseUrl)}</Badge>
-              ) : (
-                <Badge variant="destructive">Backend URL missing</Badge>
-              )}
-              {websocketUrl ? (
-                <Badge variant="outline">
-                  <WebhookIcon className="mr-1 size-3" />
-                  WS ready
-                </Badge>
-              ) : null}
+              <Badge variant="outline">Private backend proxy</Badge>
               <Button variant="outline" size="sm" onClick={() => void refreshAll()}>
                 <RefreshCwIcon className="mr-2 size-4" />
                 Refresh
               </Button>
-              {swaggerUrl ? (
-                <Button asChild variant="default" size="sm">
-                  <Link href={swaggerUrl.toString()} target="_blank">
-                    <BookOpenIcon className="mr-2 size-4" />
-                    Swagger UI
-                  </Link>
-                </Button>
-              ) : null}
             </div>
           </div>
         </section>
@@ -433,7 +420,7 @@ export default function BackendConsolePage() {
               Domains
             </TabsTrigger>
             <TabsTrigger value="docs">
-              <BookOpenIcon className="mr-2 size-4" />
+              <FileTextIcon className="mr-2 size-4" />
               Docs
             </TabsTrigger>
             <TabsTrigger value="actions">
@@ -596,28 +583,8 @@ export default function BackendConsolePage() {
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                   <p className="text-muted-foreground">
-                    Page {incoming?.page ?? 1} of {incoming?.total_pages ?? 1}
+                    Showing {(incoming?.domains ?? []).length} of {incoming?.total_domains ?? 0} domains
                   </p>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={incomingLoading || incomingPage <= 1}
-                      onClick={() => setIncomingPage((current) => Math.max(1, current - 1))}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={incomingLoading || (incoming?.page ?? 1) >= (incoming?.total_pages ?? 1)}
-                      onClick={() => setIncomingPage((current) => current + 1)}
-                    >
-                      Next
-                    </Button>
-                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -687,7 +654,7 @@ export default function BackendConsolePage() {
                                 <TableCell className="text-muted-foreground">
                                   {path === "/domains/status"
                                     ? "Public domain status lookup"
-                                    : path === "/list-domain"
+                                    : path === "/random-domain"
                                       ? "Incoming domain registry"
                                       : path === "/domains"
                                         ? "Public domain list and domain create"

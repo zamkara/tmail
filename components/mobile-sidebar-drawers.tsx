@@ -103,6 +103,8 @@ export function MobileInboxDrawerTrigger() {
             from: string
             subject: string
             timestamp: number
+            text?: string
+            otp?: string | null
           }>
         }
         const nextEmails = (data.messages ?? []).map((message) =>
@@ -171,10 +173,33 @@ export function MobileInboxDrawerTrigger() {
     function handleBackendUpdate(event: Event) {
       const customEvent = event as CustomEvent<{
         email?: string | null
+        message?: {
+          id: string
+          from: string
+          subject: string
+          timestamp: number
+          text?: string
+          otp?: string | null
+        } | null
       }>
       if (customEvent.detail.email && customEvent.detail.email !== activeAddressEmail) {
         return
       }
+
+      if (activeAddress && customEvent.detail.message?.id) {
+        const nextEmail = mapInboxMessage(
+          customEvent.detail.message,
+          activeAddress,
+          readIds.has(customEvent.detail.message.id)
+        )
+        emailsRef.current = [
+          nextEmail,
+          ...emailsRef.current.filter((email) => email.id !== nextEmail.id),
+        ]
+        setEmails(emailsRef.current)
+        return
+      }
+
       void autoRefresh()
     }
 
@@ -213,6 +238,7 @@ export function MobileInboxDrawerTrigger() {
     fetchEmails,
     isBackendWebSocketConnected,
     open,
+    readIds,
   ])
 
   async function refreshMails() {
@@ -419,8 +445,7 @@ export function MobileInboxDrawerTrigger() {
                             {email.subject}
                           </span>
                           <EmailOtpChip
-                            subject={email.subject}
-                            snippet={email.snippet}
+                            otp={email.otp}
                             className="shrink-0"
                           />
                         </span>

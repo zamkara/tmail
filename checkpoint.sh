@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-guest-email-share-status-footer"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-guest-otp-websocket-logo-footer"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,29 +28,25 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-feat: improve guest email sharing, domain status, and footer
+feat: improve guest realtime otp, logo, and request flow
 
 Main changes:
-- redesign guest email card with heading, share URL, compact domain picker, generate icon, and copy icon
-- add short guest email URL support such as `/name@domain.com`
-- keep invalid routes on the guest landing page instead of showing a 404 page
-- copy the short guest email URL from the URL label
-- apply shared guest email URLs to the active guest inbox and clean the browser URL back to `/`
-- keep pasted/custom guest emails visible even when the domain is private or MX is not ready
-- show red guest status messages for private, unavailable, or unsupported domains
-- merge app-domain visibility into `/api/domains/status` so private app domains do not appear approved for guests
-- add atomic active-address persistence for URL-based guest addresses
-- add global footer text: `© 2026 Premiumisme. All rights reserved.`
+- use backend OTP payload directly for guest inbox items and websocket updates
+- keep OTP copy available from the guest list without opening messages first
+- reduce guest inbox refresh flicker with silent background polling
+- remove guest detail prefetch that caused excessive `/api/inbox/{id}` hits
+- dedupe and smooth guest domain loading so the switcher reuses loaded store data
+- replace the guest header text with `public/logo.png`
+- keep the global footer as plain text and avoid scroll/layout issues
+- keep domain seed sync aligned with the Mongo unique key
 
 Testing:
 - [x] `pnpm typecheck`
-- [ ] Guest short email URL opens the guest page and applies the requested email
-- [ ] Guest short email URL refresh keeps the requested email active
-- [ ] Invalid guest URL redirects to the guest landing page
-- [ ] Private and unavailable domains show red status text
-- [ ] Valid public domains show email approved status
-- [ ] Guest URL label copies the short URL
-- [ ] Footer appears on all pages as text only
+- [ ] Guest inbox shows OTP on list items when backend returns `otp`
+- [ ] Guest websocket updates show OTP without opening the message
+- [ ] Guest message click does not trigger a visible loading flash
+- [ ] Guest domains load once and do not spam duplicate fetch errors
+- [ ] Footer stays as plain text on all pages
 EOF
 )
 

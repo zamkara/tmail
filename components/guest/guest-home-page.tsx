@@ -25,7 +25,7 @@ export default function GuestHomePage({
   const auroraVisible = useAuroraStore((state) => state.visible)
 
   return (
-    <div className="group relative flex min-h-svh flex-col overflow-hidden bg-muted dark:bg-background">
+    <div className="group relative flex min-h-svh flex-col bg-muted dark:bg-background">
       <DesktopOnly>
         <ShootingStars />
         {auroraVisible && (
@@ -42,7 +42,7 @@ export default function GuestHomePage({
         )}
       </DesktopOnly>
       <GuestNavbar />
-      <main className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto p-4 md:p-6">
+      <main className="relative z-10 flex flex-1 flex-col items-center p-4 md:p-6">
         <GuestMailWorkspace initialEmail={initialEmail} />
       </main>
     </div>

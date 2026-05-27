@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 
 import { buildBackendUrl } from "@/services/backend.service"
 
-const BASE = process.env.NEXT_PUBLIC_EMAIL_API_URL?.trim() ?? ""
+const BASE = process.env.EMAIL_API_URL?.trim() ?? ""
 export const dynamic = "force-dynamic"
 
 export async function GET(

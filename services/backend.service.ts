@@ -3,8 +3,8 @@ import type {
   DomainSource,
 } from "@/types"
 
-const BACKEND_API_BASE = process.env.NEXT_PUBLIC_EMAIL_API_URL?.trim() ?? ""
-const BACKEND_WS_BASE = process.env.NEXT_PUBLIC_EMAIL_WS_URL?.trim() ?? ""
+const BACKEND_API_BASE = process.env.EMAIL_API_URL?.trim() ?? ""
+const BACKEND_WS_BASE = process.env.EMAIL_WS_URL?.trim() ?? ""
 
 export interface BackendHealth {
   ok: boolean
@@ -39,14 +39,15 @@ export interface BackendIncomingDomain {
   last_seen_at: number
   total_messages: number
   mx_valid: boolean
+  source?: string
 }
 
 export interface BackendIncomingDomainsResponse {
-  page: number
+  page?: number
   limit: number
   total_domains: number
-  total_pages: number
-  last_page: number
+  total_pages?: number
+  last_page?: number
   domains: BackendIncomingDomain[]
 }
 
