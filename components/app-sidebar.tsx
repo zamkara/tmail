@@ -107,6 +107,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             from: string
             subject: string
             timestamp: number
+            text?: string
+            otp?: string | null
           }>
         }
         const nextEmails = (data.messages ?? []).map((m) =>
@@ -178,10 +180,33 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     function handleBackendUpdate(event: Event) {
       const customEvent = event as CustomEvent<{
         email?: string | null
+        message?: {
+          id: string
+          from: string
+          subject: string
+          timestamp: number
+          text?: string
+          otp?: string | null
+        } | null
       }>
       if (customEvent.detail.email && customEvent.detail.email !== activeAddressEmail) {
         return
       }
+
+      if (activeAddress && customEvent.detail.message?.id) {
+        const nextEmail = mapInboxMessage(
+          customEvent.detail.message,
+          activeAddress,
+          readIds.has(customEvent.detail.message.id)
+        )
+        emailsRef.current = [
+          nextEmail,
+          ...emailsRef.current.filter((email) => email.id !== nextEmail.id),
+        ]
+        setEmails(emailsRef.current)
+        return
+      }
+
       void refreshActiveAddress(true)
     }
 
@@ -218,6 +243,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     activeAddress,
     activeAddressEmail,
     isBackendWebSocketConnected,
+    readIds,
     refreshActiveAddress,
   ])
 
@@ -476,8 +502,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           {email.subject}
                         </span>
                         <EmailOtpChip
-                          subject={email.subject}
-                          snippet={email.snippet}
+                          otp={email.otp}
                           className="shrink-0"
                         />
                       </span>

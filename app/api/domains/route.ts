@@ -45,10 +45,32 @@ export async function GET() {
     }
 
     const domains = await DomainModel.find({}).sort({ type: 1, name: 1 }).lean()
+    const authUserId = auth?.userId ?? null
+    const privateDomainOwners = new Map<string, string | null>()
+
+    for (const domain of domains) {
+      if (
+        domain.visibility === "private" &&
+        domain.isVerified &&
+        !domain.isBanned
+      ) {
+        privateDomainOwners.set(domain.name, domain.userId?.toString() ?? null)
+      }
+    }
 
     return NextResponse.json(
       domains
-        .filter((domain) => canSeeDomain(domain, auth?.userId ?? null))
+        .filter((domain) => {
+          const privateOwnerId = privateDomainOwners.get(domain.name)
+
+          if (privateOwnerId !== undefined) {
+            return Boolean(
+              authUserId && domain.userId?.toString() === authUserId
+            )
+          }
+
+          return canSeeDomain(domain, authUserId)
+        })
         .map((domain) => ({
           id: domain._id.toString(),
           name: domain.name,

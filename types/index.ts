@@ -37,6 +37,7 @@ export interface EmailItem {
   receivedAt: string
   isRead: boolean
   snippet: string
+  otp?: string | null
 }
 
 export interface EmailDetail extends EmailItem {

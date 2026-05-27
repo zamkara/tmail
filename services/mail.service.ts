@@ -6,6 +6,8 @@ interface BeInboxItem {
   from: string       // "Name <email>" atau "email"
   subject: string
   timestamp: number  // unix ms
+  text?: string
+  otp?: string | null
 }
 
 interface BeMessage extends BeInboxItem {
@@ -30,7 +32,8 @@ function mapInboxItem(msg: BeInboxItem, addressId: string): EmailItem {
     subject: msg.subject || "(no subject)",
     receivedAt: new Date(msg.timestamp).toISOString(),
     isRead: false,
-    snippet: "",
+    snippet: msg.text ?? "",
+    otp: msg.otp ?? null,
   }
 }
 

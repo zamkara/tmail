@@ -11,14 +11,14 @@ function normalizeDomain(value: unknown) {
 }
 
 export async function fetchEmailApiSystemDomains() {
-  const emailApi = process.env.NEXT_PUBLIC_EMAIL_API_URL
+  const emailApi = process.env.EMAIL_API_URL
   if (!emailApi) return []
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), DOMAIN_FETCH_TIMEOUT_MS)
 
   try {
-    const res = await fetch(`${emailApi}/domains`, {
+    const res = await fetch(`${emailApi}/random-domain`, {
       cache: "no-store",
       signal: controller.signal,
     })
@@ -47,13 +47,15 @@ export async function syncSystemDomainsFromEmailApi() {
   await Promise.all(
     domains.map((name) =>
       Domain.updateOne(
-        { name, type: "system" },
+        { name, userId: null },
         {
-          $setOnInsert: {
-            name,
+          $set: {
             type: "system",
             source: "system",
             isVerified: true,
+          },
+          $setOnInsert: {
+            name,
             userId: null,
           },
         },

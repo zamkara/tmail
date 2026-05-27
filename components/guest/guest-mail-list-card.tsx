@@ -166,8 +166,7 @@ function EmailListButton({
           {formatRelativeInboxTime(email.receivedAt)}
         </span>
         <EmailOtpChip
-          subject={email.subject}
-          snippet={email.snippet}
+          otp={email.otp}
           className="max-w-full"
         />
       </span>

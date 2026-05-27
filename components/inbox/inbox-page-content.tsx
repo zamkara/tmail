@@ -27,6 +27,7 @@ interface BeMessage {
   created_at?: number
   text?: string
   html?: string | false
+  otp?: string | null
 }
 
 export default function InboxPageContent({ slug }: InboxPageContentProps) {
@@ -153,6 +154,7 @@ function mapEmailDetail(message: BeMessage, addressId: string): EmailDetail {
     receivedAt: new Date(receivedAt).toISOString(),
     isRead: true,
     snippet: "",
+    otp: message.otp ?? null,
     bodyHtml: message.html || null,
     bodyText: message.text ?? "",
     headers: {},

@@ -72,7 +72,14 @@ export function parseInboxSender(from: string) {
 }
 
 export function mapInboxMessage(
-  message: { id: string; from: string; subject: string; timestamp: number },
+  message: {
+    id: string
+    from: string
+    subject: string
+    timestamp: number
+    text?: string
+    otp?: string | null
+  },
   address: GeneratedAddress,
   isRead: boolean
 ): EmailItem {
@@ -83,7 +90,8 @@ export function mapInboxMessage(
     subject: message.subject || "(no subject)",
     receivedAt: new Date(message.timestamp).toISOString(),
     isRead,
-    snippet: "",
+    snippet: message.text ?? "",
+    otp: message.otp ?? null,
   }
 }
 

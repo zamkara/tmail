@@ -10,6 +10,7 @@ import {
   XIcon,
   AstroidIcon,
 } from "lucide-react"
+import Image from "next/image"
 import { useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 
@@ -37,9 +38,13 @@ import {
 } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Spinner } from "@/components/ui/spinner"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { isValidDomain, normalizeDomain } from "@/lib/domain-validation"
 import { resolveDomainSource } from "@/lib/domain-source"
 import { cn } from "@/lib/utils"
@@ -63,7 +68,7 @@ import type {
   GeneratedAddress,
 } from "@/types"
 
-const DEFAULT_INBOX_REFRESH_MS = 30000
+const DEFAULT_INBOX_REFRESH_MS = 5000
 const WEBSOCKET_CONNECTED_REFRESH_MS = 60000
 const INBOX_FETCH_TIMEOUT_MS = 8000
 
@@ -75,6 +80,8 @@ interface BeInboxItem {
   created_at?: number
   text?: string
   html?: string | false
+  is_otp?: boolean
+  otp?: string | null
 }
 
 interface PublicAppSettings {
@@ -118,6 +125,7 @@ function mapEmailItem(
     receivedAt: new Date(getMessageTime(message)).toISOString(),
     isRead,
     snippet: message.text ?? "",
+    otp: message.otp ?? null,
   }
 }
 
@@ -192,7 +200,12 @@ async function fetchDomainStatus(domain: string) {
 }
 
 function getPublicDomains(domains: Domain[]) {
-  return domains.filter((domain) => domain.visibility !== "private")
+  return domains.filter(
+    (domain) =>
+      domain.visibility !== "private" &&
+      domain.isVerified !== false &&
+      domain.isBanned !== true
+  )
 }
 
 function findMatchingDomain(domainPart: string, domains: Domain[]) {
@@ -320,6 +333,7 @@ export default function GuestMailWorkspace({
     (state) => state.addAddressAndSetActive
   )
   const updateAddress = useAddressStore((state) => state.updateAddress)
+  const removeAddress = useAddressStore((state) => state.removeAddress)
   const setActiveAddress = useAddressStore((state) => state.setActiveAddress)
   const user = useAuthStore((state) => state.user)
   const authLoaded = useAuthStore((state) => state.isLoaded)
@@ -348,6 +362,9 @@ export default function GuestMailWorkspace({
   const autoAddressPromiseRef = useRef<Promise<GeneratedAddress> | null>(null)
   const domainLoadStartedRef = useRef(false)
   const appliedUrlEmailRef = useRef<string | null>(null)
+  const generateAddressLockRef = useRef(false)
+  const domainStatusRequestRef = useRef(0)
+  const otpCacheRef = useRef<Map<string, string | null>>(new Map())
   const triggerAurora = useAuroraStore((state) => state.trigger)
   const { copy: copyToClipboard } = useCopy()
 
@@ -533,10 +550,13 @@ export default function GuestMailWorkspace({
   const activeAddressDomain = activeAddressEmail
     ? getAddressDomain(activeAddressEmail)
     : ""
+  const activeMatchedPublicDomain = activeAddressDomain
+    ? findMatchingDomain(activeAddressDomain, publicDomains)
+    : null
   const activeDomainUnavailable = Boolean(
     !isLoadingDomains &&
       activeAddressDomain &&
-      !findMatchingDomain(activeAddressDomain, publicDomains)
+      !activeMatchedPublicDomain
   )
   const domainAccessMessage = getGuestDomainAccessMessage(
     domainStatus,
@@ -548,10 +568,31 @@ export default function GuestMailWorkspace({
     const refreshSeconds = appSettings?.inboxRefreshSeconds
     if (typeof refreshSeconds !== "number") return DEFAULT_INBOX_REFRESH_MS
 
-    return Math.max(30000, refreshSeconds * 1000)
+    return Math.max(5000, refreshSeconds * 1000)
   }, [appSettings?.inboxRefreshSeconds, isBackendWebSocketConnected])
 
   useEffect(() => {
+    if (user) return
+    if (hasRequestedEmail) return
+    if (isLoadingDomains) return
+    if (!activeAddress || !activeDomainUnavailable) return
+
+    removeAddress(activeAddress.id)
+    resetInbox()
+  }, [
+    activeAddress,
+    activeDomainUnavailable,
+    hasRequestedEmail,
+    isLoadingDomains,
+    removeAddress,
+    resetInbox,
+    user,
+  ])
+
+  useEffect(() => {
+    const requestId = domainStatusRequestRef.current + 1
+    domainStatusRequestRef.current = requestId
+
     if (!activeAddressDomain) {
       setDomainStatus(null)
       setDomainStatusError(null)
@@ -566,10 +607,14 @@ export default function GuestMailWorkspace({
       setDomainStatusError(null)
 
       try {
-        const status = await fetchBestDomainStatus(activeAddressDomain)
-        if (!cancelled) setDomainStatus(status)
+        const status = activeMatchedPublicDomain
+          ? await fetchDomainStatus(activeMatchedPublicDomain.name)
+          : await fetchBestDomainStatus(activeAddressDomain)
+        if (!cancelled && domainStatusRequestRef.current === requestId) {
+          setDomainStatus(status)
+        }
       } catch (error) {
-        if (!cancelled) {
+        if (!cancelled && domainStatusRequestRef.current === requestId) {
           setDomainStatus(null)
           setDomainStatusError(
             error instanceof Error
@@ -578,7 +623,9 @@ export default function GuestMailWorkspace({
           )
         }
       } finally {
-        if (!cancelled) setIsLoadingDomainStatus(false)
+        if (!cancelled && domainStatusRequestRef.current === requestId) {
+          setIsLoadingDomainStatus(false)
+        }
       }
     }
 
@@ -587,7 +634,7 @@ export default function GuestMailWorkspace({
     return () => {
       cancelled = true
     }
-  }, [activeAddressDomain])
+  }, [activeAddressDomain, activeMatchedPublicDomain])
 
   useEffect(() => {
     if (!authLoaded) return
@@ -596,7 +643,12 @@ export default function GuestMailWorkspace({
     if (!user && appSettings?.allowGuestAddresses === false) return
     if (activeAddress) return
 
-    const reusableAddress = addresses.find(isAddressAvailable)
+    const reusableAddress = addresses.find((address) => {
+      if (!isAddressAvailable(address)) return false
+      if (user) return true
+
+      return Boolean(findMatchingDomain(getAddressDomain(address.address), publicDomains))
+    })
     if (reusableAddress) {
       setActiveAddress(reusableAddress.id)
       return
@@ -618,10 +670,7 @@ export default function GuestMailWorkspace({
     autoAddressPromiseRef.current = user
       ? generateAddress(firstAvailableDomain.id, firstAvailableDomain.name, true)
       : Promise.resolve(
-          createGuestAddress(
-            firstAvailableDomain,
-            appSettings?.allowWildcardSubdomains ?? true
-          )
+          createGuestAddress(firstAvailableDomain, false)
         )
 
     void autoAddressPromiseRef.current
@@ -654,7 +703,9 @@ export default function GuestMailWorkspace({
     user,
   ])
 
-  const loadEmails = useCallback(async () => {
+  const loadEmails = useCallback(async (silent = false) => {
+    if (generateAddressLockRef.current) return
+
     if (!activeAddress) {
       setEmails([])
       setExpandedEmailId(null)
@@ -670,15 +721,47 @@ export default function GuestMailWorkspace({
       return
     }
 
-    setIsLoading(true)
-    setError(null)
+    if (!silent) {
+      setIsLoading(true)
+      setError(null)
+    }
 
     try {
       const data = await fetchJsonWithTimeout<unknown>(
         `/api/inbox?address=${encodeURIComponent(activeAddress.address)}`
       )
-      const nextEmails = extractMessages(data).map((message) =>
-        mapEmailItem(message, activeAddress, readIds.has(message.id))
+      const nextEmails = await Promise.all(
+        extractMessages(data).map(async (message) => {
+          const email = mapEmailItem(
+            message,
+            activeAddress,
+            readIds.has(message.id)
+          )
+          const cachedOtp = otpCacheRef.current.get(email.id)
+
+          if (email.otp) {
+            otpCacheRef.current.set(email.id, email.otp)
+            return email
+          }
+
+          if (cachedOtp !== undefined) {
+            return { ...email, otp: cachedOtp }
+          }
+
+          if (!message.is_otp) return email
+
+          try {
+            const detailData = await fetchJsonWithTimeout<BeInboxItem>(
+              `/api/inbox/${email.id}`
+            )
+            const otp = detailData.otp ?? null
+            otpCacheRef.current.set(email.id, otp)
+            return { ...email, otp }
+          } catch {
+            otpCacheRef.current.set(email.id, null)
+            return email
+          }
+        })
       )
 
       if (nextEmails.length > prevEmailCountRef.current) {
@@ -688,10 +771,14 @@ export default function GuestMailWorkspace({
 
       setEmails(nextEmails)
     } catch {
-      setEmails([])
-      setError("Failed to load inbox.")
+      if (!silent) {
+        setEmails([])
+        setError("Failed to load inbox.")
+      }
     } finally {
-      setIsLoading(false)
+      if (!silent) {
+        setIsLoading(false)
+      }
     }
   }, [activeAddress, activeDomainUnavailable, domainAccessMessage, readIds])
 
@@ -732,7 +819,7 @@ export default function GuestMailWorkspace({
 
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible" && navigator.onLine) {
-        void loadEmails()
+        void loadEmails(true)
       }
     }, inboxRefreshMs)
 
@@ -743,11 +830,33 @@ export default function GuestMailWorkspace({
     function handleBackendUpdate(event: Event) {
       const customEvent = event as CustomEvent<{
         email?: string | null
+        message?: BeInboxItem | null
       }>
       if (customEvent.detail.email && customEvent.detail.email !== activeAddressEmail) {
         return
       }
-      void loadEmails()
+
+      if (activeAddress && customEvent.detail.message?.id) {
+        const nextEmail = mapEmailItem(
+          customEvent.detail.message,
+          activeAddress,
+          readIds.has(customEvent.detail.message.id)
+        )
+        if (nextEmail.otp) {
+          otpCacheRef.current.set(nextEmail.id, nextEmail.otp)
+        }
+        setEmails((currentEmails) => {
+          const withoutCurrent = currentEmails.filter(
+            (email) => email.id !== nextEmail.id
+          )
+          return [nextEmail, ...withoutCurrent]
+        })
+        setError(null)
+        triggerAurora()
+        return
+      }
+
+      void loadEmails(true)
     }
 
     function handleBackendWebSocketStatus(event: Event) {
@@ -773,7 +882,7 @@ export default function GuestMailWorkspace({
         handleBackendWebSocketStatus
       )
     }
-  }, [activeAddressEmail, loadEmails])
+  }, [activeAddress, activeAddressEmail, loadEmails, readIds, triggerAurora])
 
   useEffect(() => {
     setExpandedEmailId(null)
@@ -798,12 +907,20 @@ export default function GuestMailWorkspace({
           `/api/inbox/${email.id}`
         )
         const detail = mapEmailDetail(data, activeAddress)
+        if (detail.otp) {
+          otpCacheRef.current.set(email.id, detail.otp)
+        }
         setEmailDetails((prev) => ({ ...prev, [email.id]: detail }))
         markRead(email.id)
         setEmails((currentEmails) =>
           currentEmails.map((currentEmail) =>
             currentEmail.id === email.id
-              ? { ...currentEmail, isRead: true }
+              ? {
+                  ...currentEmail,
+                  isRead: true,
+                  snippet: detail.bodyText || currentEmail.snippet,
+                  otp: detail.otp ?? currentEmail.otp,
+                }
               : currentEmail
           )
         )
@@ -818,7 +935,10 @@ export default function GuestMailWorkspace({
   }
 
   async function handleGenerateRandomAddress() {
+    if (generateAddressLockRef.current) return
+    generateAddressLockRef.current = true
     setIsWillcardLoading(true)
+
     try {
       if (publicDomains.length === 0) {
         toast.error("No domains available")
@@ -842,12 +962,12 @@ export default function GuestMailWorkspace({
         expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
       }
       resetInbox()
-      addAddress(address)
-      setActiveAddress(address.id)
+      addAddressAndSetActive(address)
       toast.success("Address generated")
     } catch {
       toast.error("Failed to generate address")
     } finally {
+      generateAddressLockRef.current = false
       setIsWillcardLoading(false)
     }
   }
@@ -990,14 +1110,20 @@ export default function GuestMailWorkspace({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col justify-center gap-4">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 rounded-xl border bg-card p-5 text-card-foreground shadow">
         {activeAddress ? (
           <>
             <div className="space-y-2 text-center">
-              <h1 className="text-2xl font-semibold tracking-normal text-foreground sm:text-3xl">
-                Premiumisme - Email
-              </h1>
+              <Image
+                src="/logo.png"
+                alt="Premiumisme Email"
+                width={360}
+                height={80}
+                priority
+                className="mx-auto max-w-[320px] object-contain sm:max-w-[360px]"
+                style={{ width: "100%", height: "auto" }}
+              />
               <p className="text-sm text-muted-foreground sm:text-base">
                 Create temporary email easily, quickly, and practically.
               </p>
@@ -1031,20 +1157,25 @@ export default function GuestMailWorkspace({
                 )}
               </div>
               <DomainAddressSwitcher hideGenerate trigger="icon" />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-lg"
-                aria-label="Generate new email address"
-                disabled={!activeAddress || isWillcardLoading}
-                onClick={() => void handleGenerateRandomAddress()}
-              >
-                {isWillcardLoading ? (
-                  <Spinner className="size-4" />
-                ) : (
-                  <AstroidIcon className="size-4" />
-                )}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-lg"
+                    aria-label="Generate new email address"
+                    disabled={!activeAddress || isWillcardLoading}
+                    onClick={() => void handleGenerateRandomAddress()}
+                  >
+                    {isWillcardLoading ? (
+                      <Spinner className="size-4" />
+                    ) : (
+                      <AstroidIcon className="size-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Generate new email address</TooltipContent>
+              </Tooltip>
               <CopyButton
                 text={activeAddress.address}
                 className="size-10 rounded-md border text-primary dark:text-foreground"
@@ -1246,7 +1377,7 @@ export default function GuestMailWorkspace({
               </EmptyHeader>
             </Empty>
           ) : (
-            <ScrollArea className="h-full max-h-96 min-h-60 lg:max-h-150">
+            <div className="max-h-96 min-h-60 overflow-y-auto lg:max-h-150">
               <div className="flex flex-col p-2">
                 {filteredEmails.map((email, index) => (
                   <div key={email.id}>
@@ -1255,27 +1386,19 @@ export default function GuestMailWorkspace({
                       isExpanded={email.id === expandedEmailId}
                       onToggle={() => void handleToggleEmail(email)}
                     />
-                    <div
-                      className="grid transition-[grid-template-rows] duration-300 ease-in-out"
-                      style={{
-                        gridTemplateRows:
-                          email.id === expandedEmailId ? "1fr" : "0fr",
-                      }}
-                    >
-                      <div className="overflow-hidden">
-                        <EmailDetailContent
-                          detail={emailDetails[email.id]}
-                          isLoading={loadingDetailId === email.id}
-                        />
-                      </div>
-                    </div>
+                    {email.id === expandedEmailId ? (
+                      <EmailDetailContent
+                        detail={emailDetails[email.id]}
+                        isLoading={loadingDetailId === email.id}
+                      />
+                    ) : null}
                     {index < emails.length - 1 && (
                       <Separator className="my-1" />
                     )}
                   </div>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -1432,8 +1555,7 @@ function EmailItemButton({
           {formatRelativeInboxTime(email.receivedAt)}
         </span>
         <EmailOtpChip
-          subject={email.subject}
-          snippet={email.snippet}
+          otp={email.otp}
           className="max-w-full"
         />
       </span>
@@ -1456,12 +1578,7 @@ function EmailDetailContent({
   isLoading: boolean
 }) {
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-        <Spinner />
-        <span>Loading email...</span>
-      </div>
-    )
+    return null
   }
 
   if (!detail) return null
@@ -1469,11 +1586,12 @@ function EmailDetailContent({
   const senderName = detail.from.name ?? detail.from.email
 
   return (
-    <div className="border-t px-6 py-5">
+    <div className="max-h-[min(70svh,680px)] overflow-y-auto border-t px-6 py-5">
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-normal">
           {detail.subject}
         </h1>
+        <EmailOtpChip otp={detail.otp} className="w-fit" />
         <div className="flex flex-col gap-1 text-sm text-muted-foreground">
           <p>
             From <span className="text-foreground">{senderName}</span> &lt;
@@ -1484,13 +1602,13 @@ function EmailDetailContent({
       </div>
       <div className="mt-4">
         <div className="airmail-stripe h-4 w-full rounded-t-lg" />
-        <div className="min-h-60 border-y bg-background">
+        <div className="max-h-[min(52svh,520px)] min-h-60 overflow-y-auto border-y bg-background">
           {detail.bodyHtml ? (
             <iframe
               title={detail.subject}
               srcDoc={`<style>html,body{background:transparent!important;margin:0}</style>${detail.bodyHtml}`}
               sandbox="allow-same-origin"
-              className="h-96 w-full bg-background"
+              className="h-[520px] w-full bg-background"
             />
           ) : (
             <pre className="min-h-60 p-4 font-sans text-sm whitespace-pre-wrap">
