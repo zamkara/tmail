@@ -1,3 +1,4 @@
+@import url("https://rsms.me/inter/inter.css");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -13,8 +14,9 @@
 }
 
 @theme inline {
-  --font-heading: var(--font-sans);
-  --font-sans: var(--font-sans);
+  --font-heading: "Inter", sans-serif;
+  --font-sans: "Inter", sans-serif;
+  --font-mono: "Inter", sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -91,37 +93,37 @@
 }
 
 .dark {
-  --background: hsl(237 23% 16%);
-  --foreground: oklch(0.985 0 0);
-  --card: hsl(237 23% 17%);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: hsl(237 23% 17%);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: #5b5c9a;
-  --primary-foreground: hsl(0 0% 98%);
-  --secondary: hsl(237 23% 19%);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: hsl(237 23% 18%);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: hsl(237 23% 18%);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: hsl(237 23% 24% / 0.75);
-  --input: hsl(237 23% 24% / 0.8);
-  --ring: oklch(0.556 0 0);
-  --chart-1: hsl(237 23% 28%);
-  --chart-2: hsl(237 23% 24%);
-  --chart-3: hsl(237 23% 20%);
-  --chart-4: hsl(237 23% 16%);
-  --chart-5: hsl(237 23% 12%);
-  --sidebar: hsl(237 23% 17%);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: hsl(237 23% 16%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(237 23% 18%);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: hsl(237 23% 24% / 0.75);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #050505;
+  --foreground: #fafafa;
+  --card: #141414;
+  --card-foreground: #fafafa;
+  --popover: #141414;
+  --popover-foreground: #fafafa;
+  --primary: #443d8d;
+  --primary-foreground: #fafafa;
+  --secondary: #25263c;
+  --secondary-foreground: #fafafa;
+  --muted: #050505;
+  --muted-foreground: #a1a1a1;
+  --accent: #0610d1;
+  --accent-foreground: #fafafa;
+  --destructive: #e76113;
+  --border: #322e5c;
+  --input: #030308;
+  --ring: #737373;
+  --chart-1: #1d259b;
+  --chart-2: #2f314b;
+  --chart-3: #27283f;
+  --chart-4: #1f2032;
+  --chart-5: #181826;
+  --sidebar: #141414;
+  --sidebar-foreground: #fafafa;
+  --sidebar-primary: #4146a1;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #25263c;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: #322e5c;
+  --sidebar-ring: #737373;
 }
 
 @layer base {
@@ -142,7 +144,7 @@
   }
   html {
     font-optical-sizing: auto;
-    font-variation-settings: "slnt" 0, "wdth" 100, "GRAD" 0, "ROND" 0;
+    font-family: "Inter", sans-serif;
     @apply font-sans;
   }
 }

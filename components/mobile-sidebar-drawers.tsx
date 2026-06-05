@@ -309,7 +309,7 @@ export function MobileInboxDrawerTrigger() {
           <PanelLeftIcon />
         </Button>
       </DrawerTrigger>
-      <DrawerContent className="h-[78svh] w-full">
+      <DrawerContent className="h-[78svh] w-full border-border bg-card text-card-foreground">
         <DrawerHeader>
           <DrawerTitle>Inbox</DrawerTitle>
           <DrawerDescription>
@@ -339,7 +339,7 @@ export function MobileInboxDrawerTrigger() {
             </Button>
             <Button
               type="button"
-              variant="destructive"
+              variant="default"
               size="icon-sm"
               aria-label="Delete all messages"
               onClick={() => setDeleteConfirmOpen(true)}
@@ -349,6 +349,7 @@ export function MobileInboxDrawerTrigger() {
                 isRefreshing ||
                 isDeletingMessages
               }
+              className="bg-[#fb2c36] text-white hover:bg-[#fb2c36]/90 disabled:bg-[#fb2c36] disabled:text-white disabled:opacity-60"
             >
               {isDeletingMessages ? (
                 <RefreshCwIcon className="animate-spin" />
@@ -360,7 +361,7 @@ export function MobileInboxDrawerTrigger() {
               open={deleteConfirmOpen}
               onOpenChange={setDeleteConfirmOpen}
             >
-              <DialogContent className="sm:max-w-sm">
+              <DialogContent className="border-border bg-card text-card-foreground sm:max-w-sm">
                 <DialogHeader>
                   <DialogTitle>Delete all messages?</DialogTitle>
                   <DialogDescription>
@@ -378,9 +379,10 @@ export function MobileInboxDrawerTrigger() {
                   </Button>
                   <Button
                     type="button"
-                    variant="destructive"
+                    variant="default"
                     disabled={isDeletingMessages}
                     onClick={() => void deleteAllMessages()}
+                    className="bg-[#fb2c36] text-white hover:bg-[#fb2c36]/90 disabled:bg-[#fb2c36] disabled:text-white disabled:opacity-60"
                   >
                     {isDeletingMessages ? (
                       <RefreshCwIcon className="animate-spin" />
@@ -456,7 +458,7 @@ export function MobileInboxDrawerTrigger() {
               )}
             </div>
           </ScrollArea>
-          <nav className="flex shrink-0 flex-row items-center justify-center gap-2 border-t bg-popover p-3">
+          <nav className="flex shrink-0 flex-row items-center justify-center gap-2 border-t border-border bg-card p-3">
             {navItems.map((item) => (
               <Button
                 key={item.title}
@@ -505,7 +507,7 @@ export function MobileAddressDrawerTrigger() {
           <PanelRightIcon />
         </Button>
       </DrawerTrigger>
-      <DrawerContent className="h-[78svh] w-full">
+      <DrawerContent className="h-[78svh] w-full border-border bg-card text-card-foreground">
         <DrawerHeader>
           <DrawerTitle>Email Addresses</DrawerTitle>
           <DrawerDescription>

@@ -154,14 +154,14 @@ export default function AddDomainDialog({
           </Field>
         </FieldGroup>
 
-        <section className="flex flex-col gap-3 rounded-lg border bg-muted/40 p-3 text-sm">
+        <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 text-sm shadow-sm">
           <div className="flex flex-col gap-1">
             <h3 className="font-medium">DNS configuration required</h3>
             <p className="text-muted-foreground">
               Add an MX record pointing to the address below.
             </p>
           </div>
-          <div className="overflow-hidden rounded-lg border bg-background text-xs">
+          <div className="overflow-hidden rounded-lg border border-border bg-input text-xs">
             <DnsRow label="Type" value="MX" />
             <DnsRow label="Host" value="@ or subdomain" />
             <DnsRow
@@ -187,13 +187,16 @@ export default function AddDomainDialog({
     return (
       <Drawer open={open} onOpenChange={setOpen} direction="bottom">
         <DrawerTrigger asChild>{trigger ?? defaultTrigger}</DrawerTrigger>
-        <DrawerContent className="w-full overflow-hidden">
+        <DrawerContent className="w-full overflow-hidden border-border bg-card text-card-foreground">
           <form
             className="flex min-h-0 flex-1 flex-col"
             onSubmit={(event) => void handleSubmit(event)}
           >
             <DrawerHeader>
               <DrawerTitle>Add a custom domain</DrawerTitle>
+              <DrawerDescription className="sr-only">
+                Add and verify a custom email domain.
+              </DrawerDescription>
             </DrawerHeader>
             <Separator />
             {body}
@@ -208,13 +211,16 @@ export default function AddDomainDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger ?? defaultTrigger}</DialogTrigger>
-      <DialogContent className="overflow-hidden p-0">
+      <DialogContent className="overflow-hidden border-border bg-card p-0 text-card-foreground">
         <form
           className="flex min-h-0 flex-col"
           onSubmit={(event) => void handleSubmit(event)}
         >
           <DialogHeader className="p-4">
             <DialogTitle>Add a custom domain</DialogTitle>
+            <DialogDescription className="sr-only">
+              Add and verify a custom email domain.
+            </DialogDescription>
           </DialogHeader>
           <Separator />
           {body}
@@ -230,9 +236,11 @@ export default function AddDomainDialog({
 
 function DnsRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[88px_minmax(0,1fr)] border-b last:border-b-0">
-      <div className="bg-muted/50 px-3 py-2 text-muted-foreground">{label}</div>
-      <code className="min-w-0 px-3 py-2 font-mono text-xs break-all">
+    <div className="grid grid-cols-[88px_minmax(0,1fr)] border-b border-border last:border-b-0">
+      <div className="bg-secondary px-3 py-2 text-secondary-foreground">
+        {label}
+      </div>
+      <code className="min-w-0 px-3 py-2 font-mono text-xs break-all text-foreground">
         {value}
       </code>
     </div>
