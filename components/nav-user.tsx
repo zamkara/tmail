@@ -473,7 +473,11 @@ function PreferenceSurface({
           <PreferenceContent user={user} />
         </div>
         <DialogFooter className="mx-auto my-auto w-full">
-          <Button type="button" variant="destructive">
+          <Button
+            type="button"
+            variant="default"
+            className="bg-[#fb2c36] text-white hover:bg-[#fb2c36]/90"
+          >
             Delete account
           </Button>
           <Button type="button">Save changes</Button>

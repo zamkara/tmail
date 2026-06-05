@@ -18,7 +18,7 @@ export default function InboxEmpty({
   description = "Messages received at this address will appear here.",
 }: InboxEmptyProps) {
   return (
-    <Empty className="min-h-[360px] border">
+    <Empty className="min-h-[360px] border border-border bg-card text-card-foreground">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <InboxIcon />

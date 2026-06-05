@@ -10,7 +10,6 @@ import {
   XIcon,
   AstroidIcon,
 } from "lucide-react"
-import Image from "next/image"
 import { useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 
@@ -71,6 +70,16 @@ import type {
 const DEFAULT_INBOX_REFRESH_MS = 5000
 const WEBSOCKET_CONNECTED_REFRESH_MS = 60000
 const INBOX_FETCH_TIMEOUT_MS = 8000
+const DEFAULT_AURORA_COLOR_STOPS: [string, string, string] = [
+  "#dc67ff",
+  "#420e73",
+  "#420e73",
+]
+const OTP_AURORA_COLOR_STOPS: [string, string, string] = [
+  "#443d8d",
+  "#443d8d",
+  "#443d8d",
+]
 
 interface BeInboxItem {
   id: string
@@ -765,7 +774,11 @@ export default function GuestMailWorkspace({
       )
 
       if (nextEmails.length > prevEmailCountRef.current) {
-        triggerAurora()
+        triggerAurora(
+          nextEmails.some((email) => email.otp)
+            ? OTP_AURORA_COLOR_STOPS
+            : DEFAULT_AURORA_COLOR_STOPS
+        )
       }
       prevEmailCountRef.current = nextEmails.length
 
@@ -852,7 +865,9 @@ export default function GuestMailWorkspace({
           return [nextEmail, ...withoutCurrent]
         })
         setError(null)
-        triggerAurora()
+        triggerAurora(
+          nextEmail.otp ? OTP_AURORA_COLOR_STOPS : DEFAULT_AURORA_COLOR_STOPS
+        )
         return
       }
 
@@ -1115,14 +1130,14 @@ export default function GuestMailWorkspace({
         {activeAddress ? (
           <>
             <div className="space-y-2 text-center">
-              <Image
-                src="/logo.png"
-                alt="Premiumisme Email"
-                width={360}
-                height={80}
-                priority
-                className="mx-auto max-w-[320px] object-contain sm:max-w-[360px]"
-                style={{ width: "100%", height: "auto" }}
+              <div
+                role="img"
+                aria-label="Premiumisme Email"
+                className="mx-auto h-[49px] w-full max-w-[220px] bg-primary dark:bg-foreground sm:h-[58px] sm:max-w-[260px]"
+                style={{
+                  mask: "url('/logo.png') center / contain no-repeat",
+                  WebkitMask: "url('/logo.png') center / contain no-repeat",
+                }}
               />
               <p className="text-sm text-muted-foreground sm:text-base">
                 Create temporary email easily, quickly, and practically.
@@ -1266,7 +1281,7 @@ export default function GuestMailWorkspace({
             </Button>
             <Button
               type="button"
-              variant="destructive"
+              variant="default"
               size="sm"
               aria-label="Delete all messages"
               disabled={
@@ -1277,7 +1292,7 @@ export default function GuestMailWorkspace({
                 isDeletingMessages
               }
               onClick={() => setDeleteConfirmOpen(true)}
-              className="gap-2"
+              className="gap-2 bg-[#fb2c36] text-white hover:bg-[#fb2c36]/90 disabled:bg-[#fb2c36] disabled:text-white disabled:opacity-60"
             >
               {isDeletingMessages ? (
                 <Spinner className="size-4" />
@@ -1311,6 +1326,7 @@ export default function GuestMailWorkspace({
                     variant="destructive"
                     disabled={isDeletingMessages}
                     onClick={() => void handleDeleteAllMessages()}
+                    className="bg-[#fb2c36] text-white hover:bg-[#fb2c36]/90"
                   >
                     {isDeletingMessages ? (
                       <Spinner className="size-4" />

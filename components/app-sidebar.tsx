@@ -406,7 +406,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </Button>
             <Button
               type="button"
-              variant="destructive"
+              variant="default"
               size="icon-sm"
               aria-label="Delete all messages"
               disabled={
@@ -416,6 +416,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 isDeletingMessages
               }
               onClick={() => setDeleteConfirmOpen(true)}
+              className="bg-[#fb2c36] text-white hover:bg-[#fb2c36]/90 disabled:bg-[#fb2c36] disabled:text-white disabled:opacity-60"
             >
               {isDeletingMessages ? (
                 <RefreshCwIcon className="animate-spin" />
@@ -425,7 +426,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </Button>
           </div>
           <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-            <DialogContent className="sm:max-w-sm">
+            <DialogContent className="border-border bg-card text-card-foreground sm:max-w-sm">
               <DialogHeader>
                 <DialogTitle>Delete all messages?</DialogTitle>
                 <DialogDescription>
@@ -443,9 +444,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </Button>
                 <Button
                   type="button"
-                  variant="destructive"
+                  variant="default"
                   disabled={isDeletingMessages}
                   onClick={() => void handleDeleteAllMessages()}
+                  className="bg-[#fb2c36] text-white hover:bg-[#fb2c36]/90 disabled:bg-[#fb2c36] disabled:text-white disabled:opacity-60"
                 >
                   {isDeletingMessages ? <RefreshCwIcon className="animate-spin" /> : null}
                   Delete messages

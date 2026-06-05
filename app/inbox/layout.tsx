@@ -42,7 +42,7 @@ export default async function InboxLayout({
       <AddressSidebarProvider>
         <SidebarInset>
           <SyncActiveAddress />
-          <header className="fixed inset-x-0 bottom-0 z-40 flex shrink-0 items-center gap-2 border-t bg-background p-4 md:sticky md:top-0 md:bottom-auto md:border-t-0 md:border-b">
+          <header className="fixed inset-x-0 bottom-0 z-40 flex shrink-0 items-center gap-2 border-t border-border bg-card p-4 text-card-foreground md:sticky md:top-0 md:bottom-auto md:border-t-0 md:border-b">
             <MobileInboxDrawerTrigger />
             <SidebarTrigger className="-ml-1 hidden md:inline-flex" />
             <Separator
@@ -56,7 +56,9 @@ export default async function InboxLayout({
               <AddressSidebarTrigger className="hidden md:inline-flex" />
             </div>
           </header>
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-20 md:pb-0">{children}</div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-background pb-20 text-foreground md:pb-0">
+            {children}
+          </div>
         </SidebarInset>
         <AddressSidebar />
       </AddressSidebarProvider>

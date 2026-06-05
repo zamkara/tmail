@@ -42,14 +42,14 @@ export default function EmailPreview({ email }: EmailPreviewProps) {
   }, [calcScale])
 
   return (
-    <article className="flex flex-col">
-      <div className="shrink-0 border-b p-6">
-        <header className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold tracking-normal">
+    <article className="flex min-h-full flex-col bg-background text-foreground">
+      <div className="shrink-0 border-b border-border bg-card px-5 py-4 text-card-foreground">
+        <header className="flex flex-col gap-1.5">
+          <h1 className="text-lg font-semibold tracking-normal">
             {email.subject}
           </h1>
           <EmailOtpChip otp={email.otp} className="w-fit" />
-          <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+          <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
             <p>
               From <span className="text-foreground">{senderName}</span> &lt;
               {email.from.email}&gt;
@@ -58,12 +58,12 @@ export default function EmailPreview({ email }: EmailPreviewProps) {
           </div>
         </header>
       </div>
-      <div className="h-220 overflow-hidden p-6">
+      <div className="h-[calc(100svh-8.5rem)] overflow-hidden bg-background px-5 py-4">
         <ScrollArea className="h-full w-full bg-background">
-          <div className="airmail-stripe h-4 w-full rounded-b-lg" />
+          <div className="airmail-stripe mx-auto h-3 w-full max-w-3xl rounded-t-md" />
           <div
             ref={containerRef}
-            className="w-full border-y dark:border-foreground dark:invert-96"
+            className="mx-auto w-full max-w-3xl border-y border-border bg-background"
             style={{
               height:
                 iframeHeight > 0 ? `${iframeHeight * scale}px` : undefined,
@@ -81,17 +81,17 @@ export default function EmailPreview({ email }: EmailPreviewProps) {
                   title={email.subject}
                   srcDoc={`<style>html,body{background:transparent!important;margin:0}</style>${email.bodyHtml}`}
                   sandbox="allow-same-origin"
-                  className="w-full max-w-158"
+                  className="w-full"
                   onLoad={calcScale}
                 />
               </div>
             ) : (
-              <pre className="rounded-lg bg-muted px-4 font-sans text-sm whitespace-pre-wrap">
+              <pre className="rounded-md bg-input p-4 font-sans text-sm whitespace-pre-wrap text-foreground">
                 {email.bodyText}
               </pre>
             )}
           </div>
-          <div className="airmail-stripe h-4 w-full" />
+          <div className="airmail-stripe mx-auto h-3 w-full max-w-3xl rounded-b-md" />
         </ScrollArea>
       </div>
     </article>

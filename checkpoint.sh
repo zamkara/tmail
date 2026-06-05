@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-guest-otp-websocket-logo-footer"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-guest-dark-theme-inbox-polish"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,25 +28,25 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-feat: improve guest realtime otp, logo, and request flow
+feat: polish guest dark theme, inbox detail, and otp effects
 
 Main changes:
-- use backend OTP payload directly for guest inbox items and websocket updates
-- keep OTP copy available from the guest list without opening messages first
-- reduce guest inbox refresh flicker with silent background polling
-- remove guest detail prefetch that caused excessive `/api/inbox/{id}` hits
-- dedupe and smooth guest domain loading so the switcher reuses loaded store data
-- replace the guest header text with `public/logo.png`
-- keep the global footer as plain text and avoid scroll/layout issues
-- keep domain seed sync aligned with the Mongo unique key
+- switch the app font to Inter from `rsms.me`
+- refresh dark mode tokens for popovers, sidebars, inbox surfaces, command menus, and toast notifications
+- recolor guest logo with theme-aware masking so light mode uses primary and dark mode stays white
+- add guest background click fade-out with delayed slow fade-in recovery
+- use `#443d8d` for the guest aurora effect when new OTP messages arrive
+- keep guest delete buttons and inbox delete controls on explicit `#fb2c36` styling instead of destructive variants
+- tighten `/inbox/.../[messageId]` email detail spacing and preserve original email body colors in dark mode
+- add `allowedDevOrigins` for the Cloudflare dev tunnel
 
 Testing:
 - [x] `pnpm typecheck`
-- [ ] Guest inbox shows OTP on list items when backend returns `otp`
-- [ ] Guest websocket updates show OTP without opening the message
-- [ ] Guest message click does not trigger a visible loading flash
-- [ ] Guest domains load once and do not spam duplicate fetch errors
-- [ ] Footer stays as plain text on all pages
+- [ ] Guest domain picker, dialogs, dropdowns, and toasts match the dark theme
+- [ ] Guest background animation fades out on background click and fades in after 5 seconds
+- [ ] Guest OTP arrival uses the `#443d8d` visual effect
+- [ ] `/inbox` sidebars use the `#141414` surface with matching border/accent colors
+- [ ] `/inbox/.../[messageId]` email detail appears compact and keeps original email body colors
 EOF
 )
 
