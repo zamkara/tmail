@@ -222,7 +222,7 @@ export default function DomainAddressSwitcher({
         className={
           trigger === "icon"
             ? "flex shrink-0 items-center"
-            : "flex w-full max-w-full items-center gap-1"
+            : "flex w-auto max-w-full items-center gap-1 md:w-full"
         }
       >
         {trigger === "icon" ? (
@@ -250,8 +250,8 @@ export default function DomainAddressSwitcher({
               <Button
                 type="button"
                 variant="default"
-                size="lg"
-                className="min-w-0 flex-1"
+                size="default"
+                className="shrink-0 justify-center gap-0 px-3.5 md:h-9 md:min-w-0 md:flex-1 md:justify-between md:gap-1.5 md:px-2.5"
                 aria-label="Select email domain"
                 aria-haspopup="dialog"
                 aria-expanded={open}
@@ -259,13 +259,18 @@ export default function DomainAddressSwitcher({
                 disabled={isLoadingDomains}
               >
                 {isLoadingDomains ? <Spinner data-icon="inline-start" /> : null}
-                <span className="min-w-0 flex-1 truncate text-left">
+                {!isLoadingDomains ? (
+                  <span className="flex -translate-x-[3px] items-center justify-center md:hidden">
+                    <MailIcon className="size-4" />
+                  </span>
+                ) : null}
+                <span className="hidden min-w-0 flex-1 truncate text-left md:block">
                   {isLoadingDomains
                     ? "Loading domains..."
                     : (activeAddress?.address ?? "Select address")}
                 </span>
                 {!isLoadingDomains ? (
-                  <MailIcon className="size-4" data-icon="inline-end" />
+                  <MailIcon className="hidden size-4 md:block" data-icon="inline-end" />
                 ) : null}
               </Button>
             </TooltipTrigger>

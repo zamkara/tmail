@@ -61,7 +61,23 @@ export async function POST(req: Request) {
     id: user._id.toString(),
     name: user.name,
     email: user.email,
+    isBanned: user.isBanned ?? false,
+    banReason: user.banReason ?? "",
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
+    lastLoginAt: user.lastLoginAt ?? null,
+    lastLoginIp: user.lastLoginIp ?? null,
+    lastLoginUserAgent: user.lastLoginUserAgent ?? null,
+    loginEvents: (user.loginEvents ?? []).map(
+      (event: {
+        at: Date
+        ip?: string | null
+        userAgent?: string | null
+      }) => ({
+        at: event.at,
+        ip: event.ip ?? null,
+        userAgent: event.userAgent ?? null,
+      })
+    ),
   })
 }

@@ -16,5 +16,6 @@ export async function GET() {
     allowGuestAddresses: settings.allowGuestAddresses,
     allowWildcardSubdomains: settings.allowWildcardSubdomains,
     inboxRefreshSeconds: settings.inboxRefreshSeconds,
+    blockedSenderDomains: settings.blockedSenderDomains,
   })
 }

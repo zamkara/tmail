@@ -59,7 +59,9 @@ export async function GET() {
       Voucher.countDocuments({}),
       User.find({})
         .sort({ createdAt: -1 })
-        .select("_id name email isBanned banReason createdAt updatedAt")
+        .select(
+          "_id name email isBanned banReason createdAt updatedAt lastLoginAt lastLoginIp lastLoginUserAgent loginEvents"
+        )
         .lean(),
       Domain.find({})
         .sort({ createdAt: -1 })
@@ -160,6 +162,20 @@ export async function GET() {
         banReason: user.banReason ?? "",
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
+        lastLoginAt: user.lastLoginAt ?? null,
+        lastLoginIp: user.lastLoginIp ?? null,
+        lastLoginUserAgent: user.lastLoginUserAgent ?? null,
+        loginEvents: (user.loginEvents ?? []).map(
+          (event: {
+            at: Date
+            ip?: string | null
+            userAgent?: string | null
+          }) => ({
+          at: event.at,
+          ip: event.ip ?? null,
+          userAgent: event.userAgent ?? null,
+          })
+        ),
       })),
       domains: domains.map((domain) => {
         const owner = domain.userId

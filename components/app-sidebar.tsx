@@ -5,9 +5,9 @@ import {
   ArchiveXIcon,
   InboxIcon,
   RefreshCwIcon,
-  TerminalIcon,
   Trash2Icon,
 } from "lucide-react"
+import Image from "next/image"
 import { useParams, usePathname, useRouter } from "next/navigation"
 import { toast } from "sonner"
 
@@ -321,8 +321,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild className="md:h-8 md:p-0">
                 <a href="#">
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                    <TerminalIcon className="size-4" />
+                  <div className="flex aspect-square size-10 items-center justify-center overflow-hidden rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                    <Image
+                      src="/ic_tmail.svg"
+                      alt="tmail"
+                      width={40}
+                      height={40}
+                      className="size-10"
+                    />
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-medium">tmail</span>

@@ -28,11 +28,10 @@ IP=$(ip -4 addr show 2>/dev/null | grep -oP 'inet \K[^/]+' | grep -v '^127\.' | 
 [ -z "$IP" ] && IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 [ -z "$IP" ] && IP="localhost"
 
-# Env file for container (pass MONGODB_URI etc.)
-ENV_FILE=""
-[ -f ".env.local" ] && ENV_FILE="--env-file=.env.local"
+# Env files for container (pass MONGODB_URI, EMAIL_API_URL, etc.)
 ENV_FLAGS=()
-[ -n "$ENV_FILE" ] && ENV_FLAGS+=("$ENV_FILE")
+[ -f ".env" ] && ENV_FLAGS+=("--env-file=.env")
+[ -f ".env.local" ] && ENV_FLAGS+=("--env-file=.env.local")
 # Also pass through any TM_ prefixed vars from host
 for var in $(env | grep '^TM_' | cut -d= -f1); do
   ENV_FLAGS+=("-e" "$var")

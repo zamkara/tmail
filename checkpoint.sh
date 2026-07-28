@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-guest-dark-theme-inbox-polish"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-admin-auth-branding-updates"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,25 +28,28 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-feat: polish guest dark theme, inbox detail, and otp effects
+feat: add admin controls, auth hardening, and branding updates
 
 Main changes:
-- switch the app font to Inter from `rsms.me`
-- refresh dark mode tokens for popovers, sidebars, inbox surfaces, command menus, and toast notifications
-- recolor guest logo with theme-aware masking so light mode uses primary and dark mode stays white
-- add guest background click fade-out with delayed slow fade-in recovery
-- use `#443d8d` for the guest aurora effect when new OTP messages arrive
-- keep guest delete buttons and inbox delete controls on explicit `#fb2c36` styling instead of destructive variants
-- tighten `/inbox/.../[messageId]` email detail spacing and preserve original email body colors in dark mode
-- add `allowedDevOrigins` for the Cloudflare dev tunnel
+- fix container deploy env loading by passing both `.env` and `.env.local`
+- add login audit tracking for IP, user agent, last login, and recent login events in admin account views
+- add blocked sender domain controls so admin can ban multiple platforms and suppress inbox delivery from banned domains
+- wire Cloudflare Turnstile into sign in and sign up with server-side verification and anti-bot refresh guidance
+- harden Turnstile widget lifecycle to avoid repeated rerender loops and add widget reload fallback
+- make admin account create card sticky and add A-Z / Z-A sorting to domain directory
+- change guest random address prefixes to 7 lowercase letters and update guest/mobile inbox button sizing behavior
+- rename breadcrumb root from `tmail` to `Email`
+- replace brand assets with `ic_tmail.svg`, guest theme banners, auth desktop banner, and set site title/favicon to `Pusat Mail`
+- add return-to-home button on auth pages and populate the desktop auth empty panel with the sign banner
 
 Testing:
 - [x] `pnpm typecheck`
-- [ ] Guest domain picker, dialogs, dropdowns, and toasts match the dark theme
-- [ ] Guest background animation fades out on background click and fades in after 5 seconds
-- [ ] Guest OTP arrival uses the `#443d8d` visual effect
-- [ ] `/inbox` sidebars use the `#141414` surface with matching border/accent colors
-- [ ] `/inbox/.../[messageId]` email detail appears compact and keeps original email body colors
+- [ ] Verify admin account search shows last login IP and user agent correctly
+- [ ] Verify blocked sender domains prevent banned platform emails from appearing in inbox
+- [ ] Verify sign in / sign up Turnstile loads, can be reset, and blocks invalid bot verification
+- [ ] Verify guest mobile navbar inbox button alignment and guest address generation format
+- [ ] Verify guest and auth banners render correctly in light and dark modes
+- [ ] Verify browser tab title and favicon show `Pusat Mail` branding
 EOF
 )
 

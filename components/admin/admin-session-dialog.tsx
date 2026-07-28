@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useState } from "react"
 import {
+  ArrowDownIcon,
+  ArrowUpIcon,
   DownloadIcon,
   GaugeIcon,
   GlobeIcon,
@@ -78,6 +80,15 @@ interface AdminUser {
   isBanned: boolean
   banReason: string
   createdAt: string
+  updatedAt: string
+  lastLoginAt: string | null
+  lastLoginIp: string | null
+  lastLoginUserAgent: string | null
+  loginEvents: Array<{
+    at: string
+    ip: string | null
+    userAgent: string | null
+  }>
 }
 
 interface AdminDomain {
@@ -100,6 +111,7 @@ interface AdminSettings {
   allowGuestAddresses: boolean
   allowWildcardSubdomains: boolean
   inboxRefreshSeconds: number
+  blockedSenderDomains: string[]
 }
 
 interface AdminAddress {
@@ -165,6 +177,18 @@ async function readJsonResponse<T>(res: Response) {
 
   if (!data) throw new Error("Empty response")
   return data
+}
+
+function formatAdminDateTime(value: string | null | undefined) {
+  if (!value) return "Never"
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "Unknown"
+
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date)
 }
 
 export default function AdminSessionDialog() {
@@ -994,13 +1018,29 @@ function UsersModule({
   ) => Promise<void>
   onDelete: (userId: string) => Promise<void>
 }) {
+  const [query, setQuery] = useState("")
+
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredUsers = users.filter((user) => {
+    if (!normalizedQuery) return true
+
+    const haystacks = [
+      user.name,
+      user.email,
+      user.lastLoginIp ?? "",
+      user.lastLoginUserAgent ?? "",
+    ]
+
+    return haystacks.some((value) => value.toLowerCase().includes(normalizedQuery))
+  })
+
   return (
     <div className="flex flex-col gap-3">
-      <Card>
+      <Card className="sticky top-0 z-10">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Create Account</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="bg-card">
           <form
             onSubmit={onCreate}
             className="grid gap-2 lg:grid-cols-[1fr_1.2fr_1fr_auto]"
@@ -1027,18 +1067,32 @@ function UsersModule({
       </Card>
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">{users.length} Account(s)</CardTitle>
+          <CardTitle className="text-sm">
+            {filteredUsers.length} of {users.length} Account(s)
+          </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
-          {users.map((user) => (
-            <UserRow
-              key={user.id}
-              user={user}
-              disabled={disabled}
-              onUpdate={onUpdate}
-              onDelete={onDelete}
-            />
-          ))}
+          <Input
+            value={query}
+            disabled={disabled}
+            placeholder="Search by name, email, IP, or user agent"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          {filteredUsers.length === 0 ? (
+            <p className="rounded-lg border border-dashed px-3 py-6 text-sm text-muted-foreground">
+              No accounts match that search.
+            </p>
+          ) : (
+            filteredUsers.map((user) => (
+              <UserRow
+                key={user.id}
+                user={user}
+                disabled={disabled}
+                onUpdate={onUpdate}
+                onDelete={onDelete}
+              />
+            ))
+          )}
         </CardContent>
       </Card>
     </div>
@@ -1085,6 +1139,24 @@ function UserRow({
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{user.email}</p>
           <p className="text-xs text-muted-foreground">{user.name}</p>
+          <div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
+            <p>
+              Last login: {formatAdminDateTime(user.lastLoginAt)}
+              {user.lastLoginIp ? ` · ${user.lastLoginIp}` : ""}
+            </p>
+            <p className="break-all">
+              User agent: {user.lastLoginUserAgent ?? "Unknown"}
+            </p>
+            {user.loginEvents.length > 1 ? (
+              <p>
+                Recent IPs:{" "}
+                {user.loginEvents
+                  .slice(0, 3)
+                  .map((event) => event.ip ?? "unknown")
+                  .join(", ")}
+              </p>
+            ) : null}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant={isBanned ? "secondary" : "outline"}>
@@ -1195,6 +1267,17 @@ function DomainsModule({
     "public"
   )
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [domainSortDirection, setDomainSortDirection] = useState<"asc" | "desc">(
+    "asc"
+  )
+
+  const sortedDomains = [...domains].sort((first, second) => {
+    const comparison = first.name.localeCompare(second.name, undefined, {
+      sensitivity: "base",
+    })
+
+    return domainSortDirection === "asc" ? comparison : -comparison
+  })
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -1511,7 +1594,24 @@ function DomainsModule({
                     onChange={toggleSelectAll}
                   />
                 </TableHead>
-                <TableHead>Domain</TableHead>
+                <TableHead>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-left font-medium"
+                    onClick={() =>
+                      setDomainSortDirection((current) =>
+                        current === "asc" ? "desc" : "asc"
+                      )
+                    }
+                  >
+                    <span>Domain</span>
+                    {domainSortDirection === "asc" ? (
+                      <ArrowUpIcon className="size-3.5" />
+                    ) : (
+                      <ArrowDownIcon className="size-3.5" />
+                    )}
+                  </button>
+                </TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Source</TableHead>
                 <TableHead>Status</TableHead>
@@ -1530,7 +1630,7 @@ function DomainsModule({
                   </TableCell>
                 </TableRow>
               ) : (
-                domains.map((domain) => (
+                sortedDomains.map((domain) => (
                   <TableRow
                     key={domain.id}
                     className="cursor-pointer"
@@ -2317,9 +2417,13 @@ function LimitsModule({
   onSave: (settings: AdminSettings) => Promise<void>
 }) {
   const [draft, setDraft] = useState(settings)
+  const [blockedSenderDomainsInput, setBlockedSenderDomainsInput] = useState(
+    settings.blockedSenderDomains.join("\n")
+  )
 
   useEffect(() => {
     setDraft(settings)
+    setBlockedSenderDomainsInput(settings.blockedSenderDomains.join("\n"))
   }, [settings])
 
   return (
@@ -2327,7 +2431,13 @@ function LimitsModule({
       className="flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault()
-        void onSave(draft)
+        void onSave({
+          ...draft,
+          blockedSenderDomains: blockedSenderDomainsInput
+            .split(/\r?\n/)
+            .map((value) => value.trim().toLowerCase())
+            .filter(Boolean),
+        })
       }}
     >
       <Card>
@@ -2387,6 +2497,37 @@ function LimitsModule({
                   }))
                 }
               />
+            </Field>
+          </FieldGroup>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Blocked Platforms</CardTitle>
+          <CardDescription>
+            Block sender domains like `capcut.com`. Messages, inbox items, and OTP from these domains will not appear.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="blocked-platform-domains">
+                Sender domains
+              </FieldLabel>
+              <textarea
+                id="blocked-platform-domains"
+                value={blockedSenderDomainsInput}
+                disabled={disabled}
+                rows={8}
+                placeholder={"capcut.com\nfacebookmail.com\naccounts.google.com"}
+                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                onChange={(event) =>
+                  setBlockedSenderDomainsInput(event.target.value)
+                }
+              />
+              <FieldDescription>
+                One domain per line. Subdomains are also blocked automatically.
+              </FieldDescription>
             </Field>
           </FieldGroup>
         </CardContent>

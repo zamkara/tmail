@@ -3,7 +3,9 @@ import { NextResponse } from "next/server"
 
 import { AUTH_COOKIE, serializeAuthUser } from "@/lib/auth"
 import { connectDB } from "@/lib/db"
+import { recordUserLogin } from "@/lib/login-audit"
 import { signToken } from "@/lib/jwt"
+import { verifyTurnstileToken } from "@/lib/turnstile"
 import {
   assertRateLimit,
   getRequestIdentifier,
@@ -20,7 +22,7 @@ export async function POST(req: Request) {
       windowSeconds: 60,
     })
 
-    const { email, password } = await req.json()
+    const { email, password, turnstileToken } = await req.json()
     const isSecure = new URL(req.url).protocol === "https:"
 
     if (!email || !password) {
@@ -28,6 +30,11 @@ export async function POST(req: Request) {
         { error: "Email dan password wajib diisi" },
         { status: 400 }
       )
+    }
+
+    const turnstile = await verifyTurnstileToken(req, turnstileToken)
+    if (!turnstile.ok) {
+      return NextResponse.json({ error: turnstile.error }, { status: 400 })
     }
 
     await connectDB()
@@ -59,8 +66,13 @@ export async function POST(req: Request) {
       userId: user._id.toString(),
       email: user.email,
     })
+    await recordUserLogin(user._id.toString(), req)
+    const freshUser = await User.findById(user._id)
+    if (!freshUser) {
+      throw new Error("User not found after login")
+    }
 
-    const res = NextResponse.json({ user: serializeAuthUser(user) })
+    const res = NextResponse.json({ user: serializeAuthUser(freshUser) })
 
     res.cookies.set(AUTH_COOKIE, token, {
       httpOnly: true,
@@ -74,6 +86,9 @@ export async function POST(req: Request) {
   } catch (error) {
     if (isRateLimitError(error)) {
       return NextResponse.json({ error: error.message }, { status: 429 })
+    }
+    if (error instanceof Error && error.message.toLowerCase().includes("anti-bot")) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
     return NextResponse.json(

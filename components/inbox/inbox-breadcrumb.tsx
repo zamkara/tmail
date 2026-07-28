@@ -121,7 +121,7 @@ export default function InboxBreadcrumb() {
     <Breadcrumb className="min-w-0">
       <BreadcrumbList className="min-w-0 flex-nowrap">
         <BreadcrumbItem className="hidden md:inline-flex">
-          <BreadcrumbLink href="/inbox">tmail</BreadcrumbLink>
+          <BreadcrumbLink href="/inbox">Email</BreadcrumbLink>
         </BreadcrumbItem>
         <BreadcrumbSeparator className="hidden md:inline-flex" />
         <BreadcrumbItem>

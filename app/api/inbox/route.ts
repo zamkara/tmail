@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { filterBlockedInboxMessages } from "@/lib/platform-ban"
 import { buildBackendUrl } from "@/services/backend.service"
 
 const BASE = process.env.EMAIL_API_URL?.trim() ?? ""
@@ -58,7 +59,17 @@ export async function GET(req: Request) {
     })
     const data = await res.json().catch(() => null)
 
-    return NextResponse.json(data ?? { messages: [] }, {
+    const payload =
+      data && typeof data === "object" && "messages" in data
+        ? {
+            ...data,
+            messages: await filterBlockedInboxMessages(
+              Array.isArray(data.messages) ? data.messages : []
+            ),
+          }
+        : { messages: [] }
+
+    return NextResponse.json(payload, {
       status: res.ok ? 200 : res.status,
       headers: {
         "Cache-Control": "no-store, max-age=0",

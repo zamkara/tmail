@@ -11,22 +11,31 @@ export interface AuthUser {
   apiKeyBlockedIps: string[]
 }
 
-export async function register(name: string, email: string, password: string): Promise<AuthUser> {
+export async function register(
+  name: string,
+  email: string,
+  password: string,
+  turnstileToken?: string
+): Promise<AuthUser> {
   const res = await fetch("/api/auth/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, email, password }),
+    body: JSON.stringify({ name, email, password, turnstileToken }),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error ?? "Failed to register")
   return data.user
 }
 
-export async function login(email: string, password: string): Promise<AuthUser> {
+export async function login(
+  email: string,
+  password: string,
+  turnstileToken?: string
+): Promise<AuthUser> {
   const res = await fetch("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, turnstileToken }),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error ?? "Failed to sign in")

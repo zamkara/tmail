@@ -10,6 +10,7 @@ import {
   XIcon,
   AstroidIcon,
 } from "lucide-react"
+import Image from "next/image"
 import { useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 
@@ -154,9 +155,9 @@ function createGuestAddress(
   domain: { id: string; name: string },
   wildcard: boolean
 ) {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+  const chars = "abcdefghijklmnopqrstuvwxyz"
   const randomLocal = Array.from(
-    { length: 6 },
+    { length: 7 },
     () => chars[Math.floor(Math.random() * chars.length)]
   ).join("")
   const randomSub = Array.from(
@@ -961,9 +962,9 @@ export default function GuestMailWorkspace({
       }
       const picked =
         publicDomains[Math.floor(Math.random() * publicDomains.length)]
-      const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+      const chars = "abcdefghijklmnopqrstuvwxyz"
       const randomLocal = Array.from(
-        { length: 6 },
+        { length: 7 },
         () => chars[Math.floor(Math.random() * chars.length)]
       ).join("")
       const now = new Date()
@@ -1130,14 +1131,21 @@ export default function GuestMailWorkspace({
         {activeAddress ? (
           <>
             <div className="space-y-2 text-center">
-              <div
-                role="img"
-                aria-label="Premiumisme Email"
-                className="mx-auto h-[49px] w-full max-w-[220px] bg-primary dark:bg-foreground sm:h-[58px] sm:max-w-[260px]"
-                style={{
-                  mask: "url('/logo.png') center / contain no-repeat",
-                  WebkitMask: "url('/logo.png') center / contain no-repeat",
-                }}
+              <Image
+                src="/banner-guest-black.svg"
+                alt="Premiumisme Email"
+                width={520}
+                height={116}
+                className="mx-auto h-[88px] w-full max-w-[380px] object-contain dark:hidden sm:h-[116px] sm:max-w-[520px]"
+                priority
+              />
+              <Image
+                src="/banner-guest-white.svg"
+                alt="Premiumisme Email"
+                width={520}
+                height={116}
+                className="mx-auto hidden h-[88px] w-full max-w-[380px] object-contain dark:block sm:h-[116px] sm:max-w-[520px]"
+                priority
               />
               <p className="text-sm text-muted-foreground sm:text-base">
                 Create temporary email easily, quickly, and practically.

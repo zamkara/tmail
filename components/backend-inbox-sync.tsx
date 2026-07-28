@@ -8,10 +8,6 @@ const PUBLIC_EMAIL_WS_URL = process.env.NEXT_PUBLIC_EMAIL_WS_URL?.trim() ?? ""
 
 type BackendInboxUpdateDetail = {
   email?: string
-  message?: {
-    id?: string
-    [key: string]: unknown
-  }
 }
 
 function dispatchWebSocketStatus(email: string | null, connected: boolean) {
@@ -85,7 +81,6 @@ export default function BackendInboxSync() {
           new CustomEvent("tmail:backend-inbox-update", {
             detail: {
               email: payload?.email ?? email,
-              message: payload?.message ?? null,
             },
           })
         )
