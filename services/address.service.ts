@@ -67,9 +67,9 @@ export async function updateAddressLocalPart(
 
 // Untuk guest: generate lokal, disimpan di localStorage via store
 export function generateAddressLocally(domainId: string, domainName: string): GeneratedAddress {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+  const chars = "abcdefghijklmnopqrstuvwxyz"
   const random = Array.from(
-    { length: 6 },
+    { length: 7 },
     () => chars[Math.floor(Math.random() * chars.length)]
   ).join("")
   const now = new Date()

@@ -1,8 +1,11 @@
 "use client"
 
+import TurnstileWidget from "@/components/turnstile-widget"
+import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { ArrowLeftIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -28,6 +31,11 @@ export function LoginForm({
   const router = useRouter()
   const setUser = useAuthStore((s) => s.setUser)
   const [isLoading, setIsLoading] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState("")
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0)
+  const isTurnstileEnabled = Boolean(
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim()
+  )
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -39,15 +47,25 @@ export function LoginForm({
     try {
       if (isSignup) {
         const name = form.get("name") as string
-        const user = await register(name, email, password)
+        const user = await register(name, email, password, turnstileToken)
         setUser(user)
       } else {
-        const user = await login(email, password)
+        const user = await login(email, password, turnstileToken)
         setUser(user)
       }
       router.push("/inbox")
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Something went wrong")
+      const message =
+        err instanceof Error ? err.message : "Something went wrong"
+
+      if (message.toLowerCase().includes("anti-bot")) {
+        setTurnstileToken("")
+        setTurnstileResetKey((current) => current + 1)
+        toast.error(`${message} Refresh halaman lalu coba lagi.`)
+        return
+      }
+
+      toast.error(message)
     } finally {
       setIsLoading(false)
     }
@@ -56,7 +74,7 @@ export function LoginForm({
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card className="overflow-hidden p-0">
-        <CardContent className="grid p-0 md:grid-cols-2">
+        <CardContent className="grid p-0 md:grid-cols-[0.92fr_1.08fr]">
           <form className="p-6 md:p-8" onSubmit={(e) => void handleSubmit(e)}>
             <FieldGroup>
               <div className="flex flex-col items-center gap-2 text-center">
@@ -83,9 +101,29 @@ export function LoginForm({
                 <FieldLabel htmlFor="password">Password</FieldLabel>
                 <Input id="password" name="password" type="password" required minLength={8} />
               </Field>
+              {isTurnstileEnabled ? (
+                <Field>
+                  <TurnstileWidget
+                    key={turnstileResetKey}
+                    resetKey={turnstileResetKey}
+                    onTokenChange={setTurnstileToken}
+                  />
+                </Field>
+              ) : null}
               <Field>
-                <Button type="submit" disabled={isLoading}>
+                <Button
+                  type="submit"
+                  disabled={isLoading || (isTurnstileEnabled && !turnstileToken)}
+                >
                   {isLoading ? <Spinner /> : isSignup ? "Sign Up" : "Sign In"}
+                </Button>
+              </Field>
+              <Field>
+                <Button type="button" variant="outline" asChild>
+                  <Link href="/">
+                    <ArrowLeftIcon className="size-4" />
+                    Return to Home
+                  </Link>
                 </Button>
               </Field>
               <FieldDescription className="text-center">
@@ -96,7 +134,16 @@ export function LoginForm({
               </FieldDescription>
             </FieldGroup>
           </form>
-          <div className="relative hidden bg-muted md:block" />
+          <div className="relative hidden bg-muted md:flex md:items-center md:justify-center">
+            <Image
+              src="/banner-sign-original.svg"
+              alt="Sign banner"
+              width={1200}
+              height={1200}
+              className="h-auto w-full max-w-[1200px] scale-110 object-contain"
+              priority
+            />
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -2,7 +2,9 @@ import bcrypt from "bcryptjs"
 import { NextResponse } from "next/server"
 
 import { connectDB } from "@/lib/db"
+import { recordUserLogin } from "@/lib/login-audit"
 import { signToken } from "@/lib/jwt"
+import { verifyTurnstileToken } from "@/lib/turnstile"
 import { AUTH_COOKIE, serializeAuthUser } from "@/lib/auth"
 import {
   assertRateLimit,
@@ -20,7 +22,7 @@ export async function POST(req: Request) {
       windowSeconds: 60,
     })
 
-    const { name, email, password } = await req.json()
+    const { name, email, password, turnstileToken } = await req.json()
 
     if (!name || !email || !password) {
       return NextResponse.json(
@@ -36,6 +38,11 @@ export async function POST(req: Request) {
       )
     }
 
+    const turnstile = await verifyTurnstileToken(req, turnstileToken)
+    if (!turnstile.ok) {
+      return NextResponse.json({ error: turnstile.error }, { status: 400 })
+    }
+
     await connectDB()
 
     const existing = await User.findOne({ email })
@@ -48,6 +55,11 @@ export async function POST(req: Request) {
 
     const hashed = await bcrypt.hash(password, 12)
     const user = await User.create({ name, email, password: hashed })
+    await recordUserLogin(user._id.toString(), req)
+    const freshUser = await User.findById(user._id)
+    if (!freshUser) {
+      throw new Error("User not found after register")
+    }
 
     const token = await signToken({
       userId: user._id.toString(),
@@ -56,7 +68,7 @@ export async function POST(req: Request) {
 
     const isSecure = new URL(req.url).protocol === "https:"
 
-    const res = NextResponse.json({ user: serializeAuthUser(user) })
+    const res = NextResponse.json({ user: serializeAuthUser(freshUser) })
 
     res.cookies.set(AUTH_COOKIE, token, {
       httpOnly: true,
@@ -70,6 +82,9 @@ export async function POST(req: Request) {
   } catch (err) {
     if (isRateLimitError(err)) {
       return NextResponse.json({ error: err.message }, { status: 429 })
+    }
+    if (err instanceof Error && err.message.toLowerCase().includes("anti-bot")) {
+      return NextResponse.json({ error: err.message }, { status: 400 })
     }
 
     console.error("[register]", err)

@@ -7,6 +7,7 @@ export interface AppAdminSettings {
   allowGuestAddresses: boolean
   allowWildcardSubdomains: boolean
   inboxRefreshSeconds: number
+  blockedSenderDomains: string[]
 }
 
 export const DEFAULT_ADMIN_SETTINGS: AppAdminSettings = {
@@ -15,6 +16,7 @@ export const DEFAULT_ADMIN_SETTINGS: AppAdminSettings = {
   allowGuestAddresses: true,
   allowWildcardSubdomains: true,
   inboxRefreshSeconds: 30,
+  blockedSenderDomains: [],
 }
 
 export async function getAdminSettings() {
@@ -34,7 +36,18 @@ export async function getAdminSettings() {
     allowGuestAddresses: settings.allowGuestAddresses,
     allowWildcardSubdomains: settings.allowWildcardSubdomains,
     inboxRefreshSeconds: settings.inboxRefreshSeconds,
+    blockedSenderDomains: settings.blockedSenderDomains ?? [],
   }
+}
+
+function normalizeBlockedSenderDomains(value: unknown) {
+  if (!Array.isArray(value)) return []
+
+  return [...new Set(
+    value
+      .map((item) => (typeof item === "string" ? item.trim().toLowerCase() : ""))
+      .filter(Boolean)
+  )].slice(0, 500)
 }
 
 export function normalizeAdminSettingsPatch(value: unknown) {
@@ -68,6 +81,12 @@ export function normalizeAdminSettingsPatch(value: unknown) {
     patch.inboxRefreshSeconds = Math.min(
       300,
       Math.max(30, Math.floor(input.inboxRefreshSeconds))
+    )
+  }
+
+  if ("blockedSenderDomains" in input) {
+    patch.blockedSenderDomains = normalizeBlockedSenderDomains(
+      input.blockedSenderDomains
     )
   }
 

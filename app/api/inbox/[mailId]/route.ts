@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { isBlockedInboxMessage } from "@/lib/platform-ban"
 import { buildBackendUrl } from "@/services/backend.service"
 
 const BASE = process.env.EMAIL_API_URL?.trim() ?? ""
@@ -30,7 +31,15 @@ export async function GET(
       { error: "Email tidak ditemukan" },
       { status: 404 }
     )
-  return NextResponse.json(await res.json(), {
+  const data = (await res.json()) as { from?: string | null }
+  if (await isBlockedInboxMessage(data.from)) {
+    return NextResponse.json(
+      { error: "Email diblokir oleh kebijakan platform" },
+      { status: 404 }
+    )
+  }
+
+  return NextResponse.json(data, {
     headers: {
       "Cache-Control": "no-store, max-age=0",
     },

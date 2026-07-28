@@ -70,7 +70,9 @@ export async function PATCH(
   const user = await User.findByIdAndUpdate(userId, patch, {
     returnDocument: "after",
   })
-    .select("_id name email createdAt updatedAt")
+    .select(
+      "_id name email isBanned banReason createdAt updatedAt lastLoginAt lastLoginIp lastLoginUserAgent loginEvents"
+    )
     .lean()
 
   if (!user) {
@@ -85,6 +87,20 @@ export async function PATCH(
     banReason: user.banReason ?? "",
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
+    lastLoginAt: user.lastLoginAt ?? null,
+    lastLoginIp: user.lastLoginIp ?? null,
+    lastLoginUserAgent: user.lastLoginUserAgent ?? null,
+    loginEvents: (user.loginEvents ?? []).map(
+      (event: {
+        at: Date
+        ip?: string | null
+        userAgent?: string | null
+      }) => ({
+        at: event.at,
+        ip: event.ip ?? null,
+        userAgent: event.userAgent ?? null,
+      })
+    ),
   })
 }
 
