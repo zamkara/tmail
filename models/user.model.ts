@@ -20,6 +20,7 @@ const userSchema = new mongoose.Schema(
     },
     password: { type: String, required: true },
     name: { type: String, required: true, trim: true },
+    avatarPreset: { type: String, default: null },
     isBanned: { type: Boolean, default: false },
     banReason: { type: String, default: null },
     isPremium: { type: Boolean, default: false },

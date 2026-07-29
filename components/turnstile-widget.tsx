@@ -1,7 +1,7 @@
 "use client"
 
 import Script from "next/script"
-import { useCallback, useEffect, useId, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 declare global {
   interface Window {
@@ -32,15 +32,16 @@ export default function TurnstileWidget({
   onWidgetStateChange?: (state: "idle" | "loading" | "ready" | "error") => void
 }) {
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? ""
-  const elementId = useId().replace(/:/g, "")
-  const [scriptLoaded, setScriptLoaded] = useState(false)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [scriptLoaded, setScriptLoaded] = useState(
+    typeof window !== "undefined" && Boolean(window.turnstile?.render)
+  )
   const [retryNonce, setRetryNonce] = useState(0)
   const [widgetState, setWidgetState] = useState<
     "idle" | "loading" | "ready" | "error"
   >("idle")
   const widgetIdRef = useRef<string | null>(null)
   const renderAttemptRef = useRef(0)
-  const readyStateRef = useRef(false)
 
   const setState = useCallback(
     (state: "idle" | "loading" | "ready" | "error") => {
@@ -61,24 +62,17 @@ export default function TurnstileWidget({
     if (!siteKey || !scriptLoaded) return
 
     let cancelled = false
-    let readyTimeout: ReturnType<typeof setTimeout> | null = null
     let retryTimer: ReturnType<typeof setTimeout> | null = null
     renderAttemptRef.current = 0
-    readyStateRef.current = false
     onTokenChange("")
     setState("loading")
-
-    const mountNode = document.getElementById(elementId)
-    if (mountNode) {
-      mountNode.innerHTML = ""
-    }
 
     const renderWidget = () => {
       if (cancelled) return
 
-      const mountElement = document.getElementById(elementId)
+      const mountElement = containerRef.current
       if (!mountElement) {
-        setState("error")
+        retryTimer = setTimeout(renderWidget, 100)
         return
       }
 
@@ -101,30 +95,24 @@ export default function TurnstileWidget({
           theme: "auto",
           callback: (token) => {
             if (cancelled) return
-            readyStateRef.current = true
             onTokenChange(token)
             setState("ready")
           },
           "expired-callback": () => {
             if (cancelled) return
-            readyStateRef.current = false
             onTokenChange("")
-            setState("error")
+            window.turnstile?.reset(widgetIdRef.current ?? undefined)
+            setState("idle")
           },
           "error-callback": () => {
             if (cancelled) return
-            readyStateRef.current = false
             onTokenChange("")
             setState("error")
           },
         })
 
         widgetIdRef.current = widgetId
-        readyTimeout = setTimeout(() => {
-          if (!cancelled && !readyStateRef.current) {
-            setState("error")
-          }
-        }, 8000)
+        setState("idle")
       } catch {
         setState("error")
       }
@@ -134,11 +122,10 @@ export default function TurnstileWidget({
 
     return () => {
       cancelled = true
-      if (readyTimeout) clearTimeout(readyTimeout)
       if (retryTimer) clearTimeout(retryTimer)
       cleanupWidget()
     }
-  }, [cleanupWidget, elementId, onTokenChange, retryNonce, scriptLoaded, setState, siteKey])
+  }, [cleanupWidget, onTokenChange, retryNonce, scriptLoaded, setState, siteKey])
 
   useEffect(() => {
     onTokenChange("")
@@ -156,7 +143,7 @@ export default function TurnstileWidget({
         onError={() => setState("error")}
       />
       <div className="space-y-2">
-        <div id={elementId} className="min-h-16" />
+        <div ref={containerRef} className="min-h-16" />
         {widgetState === "error" ? (
           <button
             type="button"

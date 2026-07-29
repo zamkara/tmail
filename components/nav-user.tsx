@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Image from "next/image"
 import {
   BellIcon,
   ChevronsUpDownIcon,
@@ -53,6 +54,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { getGravatarUrl } from "@/lib/gravatar"
+import { getProfileAvatarSrc, PROFILE_AVATAR_PRESETS } from "@/lib/profile-avatar"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
@@ -70,6 +72,7 @@ import {
   login,
   logout,
   register,
+  updateProfile,
   updateApiKeyAccess,
 } from "@/services/auth.service"
 import { redeemDomainVoucher } from "@/services/domain.service"
@@ -94,7 +97,9 @@ export function NavUser() {
     ? {
         name: authUser.name,
         email: authUser.email,
-        avatar: getGravatarUrl(authUser.email, 80),
+        avatar:
+          getProfileAvatarSrc(authUser.avatarPreset) ??
+          getGravatarUrl(authUser.email, 80),
       }
     : { name: "Guest", email: "No account", avatar: "" }
 
@@ -302,7 +307,7 @@ function AuthForm({
               id="auth-email"
               name="email"
               type="email"
-              placeholder="m@example.com"
+              placeholder="user@gmail.com"
               required
             />
           </Field>
@@ -405,23 +410,75 @@ function AuthDialog({
 
 function PreferenceContent({
   user,
+  saveKey,
+  selectedAvatarPreset,
+  onAvatarPresetChange,
 }: {
   user: { name: string; email: string; avatar: string }
+  saveKey: string
+  selectedAvatarPreset: string | null
+  onAvatarPresetChange: (value: string) => void
 }) {
   return (
-    <form className="flex flex-col gap-4">
+    <form id={saveKey} className="flex flex-col gap-4">
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="account-email">Email</FieldLabel>
-          <Input id="account-email" type="email" defaultValue={user.email} />
+          <Input
+            id="account-email"
+            name="email"
+            type="email"
+            defaultValue={user.email}
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="account-username">Username</FieldLabel>
-          <Input id="account-username" defaultValue={user.name} />
+          <Input id="account-username" name="name" defaultValue={user.name} />
         </Field>
         <Field>
           <FieldLabel htmlFor="account-password">Password baru</FieldLabel>
-          <Input id="account-password" type="password" />
+          <Input id="account-password" name="password" type="password" />
+        </Field>
+        <Field>
+          <FieldLabel>Foto Profil</FieldLabel>
+          <div className="grid grid-cols-2 gap-3">
+            {PROFILE_AVATAR_PRESETS.map((preset) => {
+              const isActive = selectedAvatarPreset === preset.id
+
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  className={`rounded-xl border p-2 text-left transition ${
+                    isActive
+                      ? "border-primary bg-primary/8"
+                      : "border-border hover:bg-muted/50"
+                  }`}
+                  onClick={() => onAvatarPresetChange(preset.id)}
+                >
+                  <div className="mb-2 flex items-center gap-3">
+                    <div className="relative size-14 overflow-hidden rounded-full border">
+                      <Image
+                        src={preset.src}
+                        alt={preset.label}
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium">{preset.label}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {isActive ? "Dipilih" : "Pilih avatar ini"}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+          <FieldDescription>
+            Foto profil hanya bisa dipilih dari daftar preset.
+          </FieldDescription>
         </Field>
       </FieldGroup>
     </form>
@@ -439,6 +496,48 @@ function PreferenceSurface({
   isMobile: boolean
   user: { name: string; email: string; avatar: string }
 }) {
+  const authUser = useAuthStore((state) => state.user)
+  const setUser = useAuthStore((state) => state.setUser)
+  const [selectedAvatarPreset, setSelectedAvatarPreset] = React.useState<string | null>(
+    authUser?.avatarPreset ?? PROFILE_AVATAR_PRESETS[0]?.id ?? null
+  )
+  const [isSavingProfile, setIsSavingProfile] = React.useState(false)
+  const formId = React.useId()
+
+  React.useEffect(() => {
+    if (!open) return
+    setSelectedAvatarPreset(authUser?.avatarPreset ?? PROFILE_AVATAR_PRESETS[0]?.id ?? null)
+  }, [authUser?.avatarPreset, open])
+
+  async function handleSaveProfile() {
+    const form = document.getElementById(formId) as HTMLFormElement | null
+    if (!form) return
+
+    const formData = new FormData(form)
+    const name = String(formData.get("name") ?? user.name)
+    const email = String(formData.get("email") ?? user.email)
+    const password = String(formData.get("password") ?? "").trim()
+
+    setIsSavingProfile(true)
+    try {
+      const result = await updateProfile({
+        name,
+        email,
+        password: password || undefined,
+        avatarPreset: selectedAvatarPreset,
+      })
+      setUser(result.user)
+      toast.success("Profile updated")
+      onOpenChange(false)
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update profile"
+      )
+    } finally {
+      setIsSavingProfile(false)
+    }
+  }
+
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange} direction="bottom">
@@ -450,10 +549,22 @@ function PreferenceSurface({
             </DrawerDescription>
           </DrawerHeader>
           <div className="min-h-0 flex-1 overflow-auto px-4">
-            <PreferenceContent user={user} />
+            <PreferenceContent
+              user={user}
+              saveKey={formId}
+              selectedAvatarPreset={selectedAvatarPreset}
+              onAvatarPresetChange={setSelectedAvatarPreset}
+            />
           </div>
           <DrawerFooter className="px-4 pb-4">
-            <Button type="button">Save changes</Button>
+            <Button
+              type="button"
+              disabled={isSavingProfile}
+              onClick={() => void handleSaveProfile()}
+            >
+              {isSavingProfile ? <Spinner /> : null}
+              Save changes
+            </Button>
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
@@ -470,7 +581,12 @@ function PreferenceSurface({
           </DialogDescription>
         </DialogHeader>
         <div className="px-4 pb-4">
-          <PreferenceContent user={user} />
+          <PreferenceContent
+            user={user}
+            saveKey={formId}
+            selectedAvatarPreset={selectedAvatarPreset}
+            onAvatarPresetChange={setSelectedAvatarPreset}
+          />
         </div>
         <DialogFooter className="mx-auto my-auto w-full">
           <Button
@@ -480,7 +596,14 @@ function PreferenceSurface({
           >
             Delete account
           </Button>
-          <Button type="button">Save changes</Button>
+          <Button
+            type="button"
+            disabled={isSavingProfile}
+            onClick={() => void handleSaveProfile()}
+          >
+            {isSavingProfile ? <Spinner /> : null}
+            Save changes
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

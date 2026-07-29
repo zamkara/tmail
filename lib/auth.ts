@@ -7,6 +7,7 @@ type SerializableUser = {
   _id: { toString(): string }
   name: string
   email: string
+  avatarPreset?: string | null
   isPremium?: boolean | null
   premiumUntil?: Date | string | null
   premiumPrivateDomainLimit?: number | null
@@ -58,6 +59,7 @@ export function serializeAuthUser(user: SerializableUser) {
     id: user._id.toString(),
     name: user.name,
     email: user.email,
+    avatarPreset: user.avatarPreset ?? null,
     isPremium,
     premiumUntil: isPremium ? premiumUntil : null,
     premiumPrivateDomainLimit: getPremiumPrivateDomainLimit(user),

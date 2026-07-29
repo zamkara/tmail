@@ -95,7 +95,7 @@ export function LoginForm({
               )}
               <Field>
                 <FieldLabel htmlFor="email">Email</FieldLabel>
-                <Input id="email" name="email" type="email" placeholder="m@example.com" required />
+                <Input id="email" name="email" type="email" placeholder="user@gmail.com" required />
               </Field>
               <Field>
                 <FieldLabel htmlFor="password">Password</FieldLabel>
