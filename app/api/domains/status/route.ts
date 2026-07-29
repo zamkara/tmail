@@ -9,20 +9,6 @@ import { buildBackendUrl } from "@/services/backend.service"
 
 export const dynamic = "force-dynamic"
 
-function getDomainCandidates(domain: string) {
-  const normalized = normalizeDomain(domain)
-  if (!normalized) return []
-
-  const labels = normalized.split(".").filter(Boolean)
-  const candidates: string[] = []
-
-  for (let index = 0; index <= labels.length - 2; index += 1) {
-    candidates.push(labels.slice(index).join("."))
-  }
-
-  return candidates
-}
-
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const domain = searchParams.get("domain")?.trim().toLowerCase()
@@ -50,12 +36,11 @@ export async function GET(req: Request) {
     try {
       const isAdminSession = await isAdminRequest()
       await connectDB()
+      const normalizedDomain = normalizeDomain(domain)
 
-      const appDomain = await Domain.findOne({
-        name: { $in: getDomainCandidates(domain) },
-      })
-        .sort({ name: -1 })
-        .lean()
+      const appDomain = normalizedDomain
+        ? await Domain.findOne({ name: normalizedDomain }).lean()
+        : null
 
       if (appDomain) {
         const source = resolveDomainSource(appDomain)

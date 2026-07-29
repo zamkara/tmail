@@ -1768,6 +1768,8 @@ function AddressesModule({
   const defaultExpiry = toDateTimeLocal(
     new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
   )
+  const adminSelectClassName =
+    "h-8 rounded-lg border border-input bg-background px-2 text-sm text-foreground [color-scheme:dark] dark:bg-input/30 dark:text-foreground"
 
   return (
     <div className="flex flex-col gap-3">
@@ -1796,7 +1798,7 @@ function AddressesModule({
                   id="a-create-user"
                   name="userId"
                   disabled={disabled}
-                  className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
+                  className={adminSelectClassName}
                   defaultValue=""
                 >
                   <option value="" disabled>
@@ -1815,7 +1817,7 @@ function AddressesModule({
                   id="a-create-domain"
                   name="domainId"
                   disabled={disabled}
-                  className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
+                  className={adminSelectClassName}
                   defaultValue=""
                 >
                   <option value="" disabled>
@@ -1982,7 +1984,7 @@ function AddressRow({
               id={`a-edit-owner-${address.id}`}
               value={userId}
               disabled={disabled}
-              className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
+              className="h-8 rounded-lg border border-input bg-background px-2 text-sm text-foreground [color-scheme:dark] dark:bg-input/30 dark:text-foreground"
               onChange={(event) => setUserId(event.target.value)}
             >
               {users.map((user) => (
@@ -2000,7 +2002,7 @@ function AddressRow({
               id={`a-edit-domain-${address.id}`}
               value={domainId}
               disabled={disabled}
-              className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm"
+              className="h-8 rounded-lg border border-input bg-background px-2 text-sm text-foreground [color-scheme:dark] dark:bg-input/30 dark:text-foreground"
               onChange={(event) => setDomainId(event.target.value)}
             >
               {domains.map((domain) => (

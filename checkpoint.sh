@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-admin-private-domain-access-fixes"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-backend-console-stats-and-domain-polish"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,24 +28,24 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-feat: fix admin-only private system domain access flow
+feat: expand backend console stats and polish domain handling
 
 Main changes:
-- unify invalid guest email path handling so deployed `/{email}` routes no longer redirect silently and now follow the same validation flow as `?email=...`
-- fix guest domain validation so inactive subdomains are checked against their exact domain status instead of inheriting a valid parent domain
-- allow admin to set `system` domains as `private` from the admin domain editor and remove the old backend restriction that forced them back to `public`
-- restrict `private system` domains so they are only visible and usable when an admin session is active
-- hide `Open Backend Console` for guests and protect `/dashboard` server-side so only active admin sessions can access it
-- update admin domain edit copy to explain `private system` behavior and keep `guest` domains blocked from becoming private
-- remove unused oversized guest banner variant assets from the repo
+- add backend console platform totals for inbox messages, generated emails, active emails, registered domains, valid domains, private domains, incoming domains, valid MX domains, and users
+- add frontend snapshot metrics in backend console for browser connectivity, language, timezone, viewport, device memory, and CPU core count
+- normalize backend `/health` responses in the public proxy so admin health cards correctly interpret `{ api, redis, smtp }` as healthy instead of showing `Down`
+- filter nested subdomains out of the admin domain directory so only stored root domains appear in the Domains menu and stats
+- make admin address owner/domain dropdowns render with improved dark-mode colors
+- keep domain status lookup exact-match only so searched domains do not inherit parent or child domain records
+- update logged-in user random address generation to match guest format with 7 lowercase letters
 
 Testing:
 - [x] `pnpm typecheck`
-- [ ] Verify invalid `/{email}` routes in production show the same unsupported flow as local `?email=...`
-- [ ] Verify inactive subdomains like `aavc.cqpcut.pro` stay unsupported and do not inherit valid parent status
-- [ ] Verify admin can switch `system` domains between `public` and `private` in the admin Domains editor
-- [ ] Verify `private system` domains are only listed/usable while admin session is active
-- [ ] Verify guests cannot open `Open Backend Console` or access `/dashboard` directly
+- [ ] Verify Backend Console `Public Health` shows healthy when `/api/backend/public?path=/health` returns `{ "api":"ok","redis":"ok","smtp":"ok" }`
+- [ ] Verify backend console totals and frontend snapshot cards render expected values
+- [ ] Verify admin Domains menu excludes nested subdomains from the list and count
+- [ ] Verify admin Addresses owner/domain dropdowns are readable in dark mode
+- [ ] Verify logged-in generated email prefixes use 7 lowercase letters only
 EOF
 )
 

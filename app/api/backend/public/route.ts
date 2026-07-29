@@ -27,7 +27,31 @@ export async function GET(req: Request) {
   }
 
   const res = await fetch(target, { cache: "no-store" })
-  const data = await res.json().catch(() => null)
+  const data = (await res.json().catch(() => null)) as
+    | Record<string, unknown>
+    | null
+
+  if (path === "/health" && data && typeof data === "object") {
+    const api = typeof data.api === "string" ? data.api : null
+    const redis = typeof data.redis === "string" ? data.redis : null
+    const smtp = typeof data.smtp === "string" ? data.smtp : null
+    const isOk = api === "ok" && redis === "ok" && smtp === "ok"
+
+    return NextResponse.json(
+      {
+        ...data,
+        ok: isOk,
+        db: redis ?? null,
+        host: smtp ?? null,
+      },
+      {
+        status: res.status,
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      }
+    )
+  }
 
   return NextResponse.json(data ?? { error: "Empty backend response" }, {
     status: res.status,

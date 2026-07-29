@@ -143,9 +143,9 @@ export async function POST(req: Request) {
       )
     }
 
-    const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+    const chars = "abcdefghijklmnopqrstuvwxyz"
     const random = Array.from(
-      { length: 6 },
+      { length: 7 },
       () => chars[Math.floor(Math.random() * chars.length)]
     ).join("")
     const resolvedDomainName = subdomain
