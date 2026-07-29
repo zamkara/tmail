@@ -2,6 +2,7 @@ export interface AuthUser {
   id: string
   name: string
   email: string
+  avatarPreset: string | null
   isPremium: boolean
   premiumUntil: string | null
   premiumPrivateDomainLimit: number
@@ -87,5 +88,21 @@ export async function updateApiKeyAccess(input: {
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error ?? "Failed to update API key access")
+  return data
+}
+
+export async function updateProfile(input: {
+  name: string
+  email: string
+  password?: string
+  avatarPreset: string | null
+}): Promise<{ user: AuthUser }> {
+  const res = await fetch("/api/auth/profile", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? "Failed to update profile")
   return data
 }

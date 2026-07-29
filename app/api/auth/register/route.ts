@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs"
 import { NextResponse } from "next/server"
 
 import { connectDB } from "@/lib/db"
+import { getAllowedRegisterEmailDomains, isAllowedRegisterEmailDomain } from "@/lib/auth-email-domain"
 import { recordUserLogin } from "@/lib/login-audit"
 import { signToken } from "@/lib/jwt"
 import { verifyTurnstileToken } from "@/lib/turnstile"
@@ -27,6 +28,15 @@ export async function POST(req: Request) {
     if (!name || !email || !password) {
       return NextResponse.json(
         { error: "Semua field wajib diisi" },
+        { status: 400 }
+      )
+    }
+
+    if (!isAllowedRegisterEmailDomain(email)) {
+      return NextResponse.json(
+        {
+          error: `Hanya (${getAllowedRegisterEmailDomains().join(",")})`,
+        },
         { status: 400 }
       )
     }
@@ -74,7 +84,7 @@ export async function POST(req: Request) {
       httpOnly: true,
       secure: isSecure,
       sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7, // 7 hari
+      maxAge: 60 * 60 * 24 * 7,
       path: "/",
     })
 

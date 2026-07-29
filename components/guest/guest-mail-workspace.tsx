@@ -1134,17 +1134,17 @@ export default function GuestMailWorkspace({
               <Image
                 src="/banner-guest-black.svg"
                 alt="Premiumisme Email"
-                width={520}
-                height={116}
-                className="mx-auto h-[88px] w-full max-w-[380px] object-contain dark:hidden sm:h-[116px] sm:max-w-[520px]"
+                width={620}
+                height={140}
+                className="mx-auto h-[96px] w-full max-w-[400px] object-contain dark:hidden sm:h-[140px] sm:max-w-[620px]"
                 priority
               />
               <Image
                 src="/banner-guest-white.svg"
                 alt="Premiumisme Email"
-                width={520}
-                height={116}
-                className="mx-auto hidden h-[88px] w-full max-w-[380px] object-contain dark:block sm:h-[116px] sm:max-w-[520px]"
+                width={620}
+                height={140}
+                className="mx-auto hidden h-[96px] w-full max-w-[400px] object-contain dark:block sm:h-[140px] sm:max-w-[620px]"
                 priority
               />
               <p className="text-sm text-muted-foreground sm:text-base">

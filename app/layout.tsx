@@ -37,7 +37,16 @@ export default function RootLayout({
             <div className="h-svh overflow-y-auto">
               {children}
               <footer className="px-4 py-3 text-center text-xs text-muted-foreground">
-                &copy; 2026 Premiumisme. All rights reserved.
+                &copy; 2026{" "}
+                <a
+                  href="https://t.me/premiumisme"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-foreground hover:underline"
+                >
+                  Premiumisme
+                </a>
+                . All rights reserved.
               </footer>
             </div>
             <AdminSessionDialog />

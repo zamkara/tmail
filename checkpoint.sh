@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-admin-auth-branding-updates"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-avatar-branding-guest-polish"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,28 +28,25 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-feat: add admin controls, auth hardening, and branding updates
+feat: add avatar presets and polish guest branding flow
 
 Main changes:
-- fix container deploy env loading by passing both `.env` and `.env.local`
-- add login audit tracking for IP, user agent, last login, and recent login events in admin account views
-- add blocked sender domain controls so admin can ban multiple platforms and suppress inbox delivery from banned domains
-- wire Cloudflare Turnstile into sign in and sign up with server-side verification and anti-bot refresh guidance
-- harden Turnstile widget lifecycle to avoid repeated rerender loops and add widget reload fallback
-- make admin account create card sticky and add A-Z / Z-A sorting to domain directory
-- change guest random address prefixes to 7 lowercase letters and update guest/mobile inbox button sizing behavior
-- rename breadcrumb root from `tmail` to `Email`
-- replace brand assets with `ic_tmail.svg`, guest theme banners, auth desktop banner, and set site title/favicon to `Pusat Mail`
-- add return-to-home button on auth pages and populate the desktop auth empty panel with the sign banner
+- add profile avatar preset selection with only `Prem-Cute.webp` and `Prem-King.webp`
+- persist selected avatar across refresh by serializing `avatarPreset` through auth payloads and client store hydration
+- add authenticated profile update API and wire preference form save flow to persist name, email, password, and avatar preset
+- restrict sign up email domains to `gmail.com`, `hotmail.com`, and `outlook.com` with server-side validation
+- update auth form placeholders and keep unsupported email feedback only in notifications
+- polish guest branding by resizing guest banners, linking top-left brand icons back to home, and making footer `Premiumisme` open Telegram
+- refine inbox sidebar brand icon sizing so the logo no longer looks cropped or misaligned
+- include new branding and avatar assets used by guest pages and user settings
 
 Testing:
 - [x] `pnpm typecheck`
-- [ ] Verify admin account search shows last login IP and user agent correctly
-- [ ] Verify blocked sender domains prevent banned platform emails from appearing in inbox
-- [ ] Verify sign in / sign up Turnstile loads, can be reset, and blocks invalid bot verification
-- [ ] Verify guest mobile navbar inbox button alignment and guest address generation format
-- [ ] Verify guest and auth banners render correctly in light and dark modes
-- [ ] Verify browser tab title and favicon show `Pusat Mail` branding
+- [ ] Verify profile avatar selection saves and still appears after browser refresh
+- [ ] Verify only `gmail.com`, `hotmail.com`, and `outlook.com` can register
+- [ ] Verify guest brand icon and inbox sidebar icon both navigate back to home
+- [ ] Verify guest banners render at the intended size in light and dark modes
+- [ ] Verify footer `Premiumisme` link opens `https://t.me/premiumisme`
 EOF
 )
 
