@@ -499,6 +499,45 @@ export default function BackendConsolePage() {
     }
   }
 
+  async function purgeAllMessages() {
+    if (
+      !window.confirm(
+        "Delete all inbox messages from the backend database? This action cannot be undone."
+      )
+    ) {
+      return
+    }
+
+    setPurgeLoading(true)
+    try {
+      const res = await fetch("/api/backend/admin/messages", {
+        method: "POST",
+      })
+      const data = (await res.json().catch(() => null)) as
+        | { error?: string; messages_deleted?: number }
+        | null
+
+      if (!res.ok) {
+        throw new Error(data?.error ?? "Failed to delete all messages")
+      }
+
+      toast.success(
+        typeof data?.messages_deleted === "number"
+          ? `Deleted ${data.messages_deleted} messages`
+          : "Deleted all messages"
+      )
+      await refreshAll()
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to delete all messages"
+      )
+    } finally {
+      setPurgeLoading(false)
+    }
+  }
+
   const totalInboxMessages = incoming?.domains?.reduce(
     (sum, item) => sum + item.total_messages,
     0
@@ -932,6 +971,26 @@ export default function BackendConsolePage() {
 
           <TabsContent value="actions" className="mt-0 flex min-h-0 flex-1 flex-col gap-4">
             <div className="grid gap-4 xl:grid-cols-2">
+              <Card className="border-destructive/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Delete All Messages</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    Remove every inbox message currently stored in the backend database.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => void purgeAllMessages()}
+                    disabled={purgeLoading}
+                  >
+                    <Trash2Icon className="mr-2 size-4" />
+                    Delete All Messages
+                  </Button>
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm">Purge Inbox</CardTitle>
