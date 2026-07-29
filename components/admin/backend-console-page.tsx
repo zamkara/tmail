@@ -42,6 +42,24 @@ import type {
 
 type SessionState = "checking" | "guest" | "admin"
 
+interface AdminOverviewSummary {
+  stats: {
+    users: number
+    domains: number
+    addresses: number
+    activeAddresses: number
+    vouchers: number
+  }
+  domains: Array<{
+    id: string
+    name: string
+    isVerified: boolean
+    isBanned: boolean
+    visibility: "public" | "private"
+    source: "system" | "user" | "guest"
+  }>
+}
+
 function formatDateTime(value: number | string | null | undefined) {
   if (value === null || value === undefined) return "n/a"
   const date = typeof value === "number" ? new Date(value) : new Date(value)
@@ -99,6 +117,8 @@ export default function BackendConsolePage() {
   const [incoming, setIncoming] =
     useState<BackendIncomingDomainsResponse | null>(null)
   const [incomingError, setIncomingError] = useState<string | null>(null)
+  const [overview, setOverview] = useState<AdminOverviewSummary | null>(null)
+  const [overviewError, setOverviewError] = useState<string | null>(null)
   const [domainQuery, setDomainQuery] = useState("")
   const [domainStatus, setDomainStatus] = useState<BackendDomainStatus | null>(
     null
@@ -111,6 +131,14 @@ export default function BackendConsolePage() {
   const [purgeDomain, setPurgeDomain] = useState("")
   const [purgeMessageId, setPurgeMessageId] = useState("")
   const [purgeLoading, setPurgeLoading] = useState(false)
+  const [frontendSnapshot, setFrontendSnapshot] = useState<{
+    online: boolean
+    language: string
+    timezone: string
+    viewport: string
+    memory: string
+    cores: string
+  } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -190,6 +218,83 @@ export default function BackendConsolePage() {
   }, [])
 
   useEffect(() => {
+    function readFrontendSnapshot() {
+      const memory = (
+        navigator as Navigator & {
+          deviceMemory?: number
+        }
+      ).deviceMemory
+      const cores = navigator.hardwareConcurrency
+
+      setFrontendSnapshot({
+        online: navigator.onLine,
+        language: navigator.language || "n/a",
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "n/a",
+        viewport:
+          typeof window === "undefined"
+            ? "n/a"
+            : `${window.innerWidth}x${window.innerHeight}`,
+        memory: typeof memory === "number" ? `${memory} GB` : "n/a",
+        cores: typeof cores === "number" ? String(cores) : "n/a",
+      })
+    }
+
+    readFrontendSnapshot()
+    window.addEventListener("resize", readFrontendSnapshot)
+    window.addEventListener("online", readFrontendSnapshot)
+    window.addEventListener("offline", readFrontendSnapshot)
+
+    return () => {
+      window.removeEventListener("resize", readFrontendSnapshot)
+      window.removeEventListener("online", readFrontendSnapshot)
+      window.removeEventListener("offline", readFrontendSnapshot)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (sessionState !== "admin") {
+      setOverview(null)
+      setOverviewError(null)
+      return
+    }
+
+    let cancelled = false
+
+    async function loadOverview() {
+      try {
+        const res = await fetch("/api/admin/overview", { cache: "no-store" })
+        const data = (await res.json().catch(() => null)) as
+          | (AdminOverviewSummary & { error?: string })
+          | null
+
+        if (!res.ok || !data) {
+          throw new Error(data?.error ?? "Failed to load admin overview")
+        }
+
+        if (!cancelled) {
+          setOverview(data)
+          setOverviewError(null)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setOverview(null)
+          setOverviewError(
+            error instanceof Error
+              ? error.message
+              : "Failed to load admin overview"
+          )
+        }
+      }
+    }
+
+    void loadOverview()
+
+    return () => {
+      cancelled = true
+    }
+  }, [sessionState])
+
+  useEffect(() => {
     let cancelled = false
 
     async function loadSystemStatus() {
@@ -226,19 +331,36 @@ export default function BackendConsolePage() {
 
   async function refreshAll() {
     try {
-      const [healthData, swaggerData, incomingData] = await Promise.all([
+      const [healthData, swaggerData, incomingData, overviewData] = await Promise.all([
         fetchInternalBackendJson<BackendHealth>("/health"),
         fetchInternalBackendJson<BackendSwaggerSpec>("/swagger.json"),
         fetchInternalBackendJson<BackendIncomingDomainsResponse>(
           `/random-domain?limit=20`
         ),
+        sessionState === "admin"
+          ? fetch("/api/admin/overview", { cache: "no-store" }).then(
+              async (res) => {
+                const data = (await res.json().catch(() => null)) as
+                  | (AdminOverviewSummary & { error?: string })
+                  | null
+                if (!res.ok || !data) {
+                  throw new Error(
+                    data?.error ?? "Failed to load admin overview"
+                  )
+                }
+                return data
+              }
+            )
+          : Promise.resolve(null),
       ])
       setHealth(healthData)
       setSwagger(swaggerData)
       setIncoming(incomingData)
+      setOverview(overviewData)
       setHealthError(null)
       setSwaggerError(null)
       setIncomingError(null)
+      setOverviewError(null)
       toast.success("Backend data refreshed")
     } catch (error) {
       toast.error(
@@ -377,6 +499,23 @@ export default function BackendConsolePage() {
     }
   }
 
+  const totalInboxMessages = incoming?.domains?.reduce(
+    (sum, item) => sum + item.total_messages,
+    0
+  ) ?? 0
+  const totalValidIncomingDomains = incoming?.domains?.filter(
+    (item) => item.mx_valid
+  ).length ?? 0
+  const totalGeneratedEmails = overview?.stats.addresses ?? 0
+  const totalActiveEmails = overview?.stats.activeAddresses ?? 0
+  const totalRegisteredDomains = overview?.stats.domains ?? 0
+  const totalVerifiedDomains = overview?.domains.filter(
+    (domain) => domain.isVerified && !domain.isBanned
+  ).length ?? 0
+  const totalPrivateDomains = overview?.domains.filter(
+    (domain) => domain.visibility === "private"
+  ).length ?? 0
+
   return (
     <div className="min-h-svh bg-background">
       <div className="mx-auto flex min-h-svh w-full max-w-7xl flex-col gap-6 p-4 md:p-8">
@@ -491,7 +630,29 @@ export default function BackendConsolePage() {
               </Card>
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-2">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Platform Totals</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <Metric label="Inbox Messages" value={String(totalInboxMessages)} />
+                <Metric label="Generated Emails" value={String(totalGeneratedEmails)} />
+                <Metric label="Active Emails" value={String(totalActiveEmails)} />
+                <Metric label="Registered Domains" value={String(totalRegisteredDomains)} />
+                <Metric label="Valid Domains" value={String(totalVerifiedDomains)} />
+                <Metric label="Private Domains" value={String(totalPrivateDomains)} />
+                <Metric label="Incoming Domains" value={String(incoming?.total_domains ?? 0)} />
+                <Metric label="Valid MX Domains" value={String(totalValidIncomingDomains)} />
+                <Metric label="Users" value={String(overview?.stats.users ?? 0)} />
+              </CardContent>
+              {overviewError ? (
+                <CardContent className="pt-0">
+                  <p className="text-sm text-destructive">{overviewError}</p>
+                </CardContent>
+              ) : null}
+            </Card>
+
+            <div className="grid gap-4 xl:grid-cols-3">
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm">System Snapshot</CardTitle>
@@ -517,6 +678,38 @@ export default function BackendConsolePage() {
                   <Metric
                     label="Backend uptime"
                     value={formatDuration(systemStatus?.app.uptime_seconds)}
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Frontend Snapshot</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-3 md:grid-cols-2">
+                  <Metric
+                    label="Browser"
+                    value={frontendSnapshot?.online ? "Online" : "Offline"}
+                  />
+                  <Metric
+                    label="Language"
+                    value={frontendSnapshot?.language ?? "n/a"}
+                  />
+                  <Metric
+                    label="Timezone"
+                    value={frontendSnapshot?.timezone ?? "n/a"}
+                  />
+                  <Metric
+                    label="Viewport"
+                    value={frontendSnapshot?.viewport ?? "n/a"}
+                  />
+                  <Metric
+                    label="Device Memory"
+                    value={frontendSnapshot?.memory ?? "n/a"}
+                  />
+                  <Metric
+                    label="CPU Cores"
+                    value={frontendSnapshot?.cores ?? "n/a"}
                   />
                 </CardContent>
               </Card>

@@ -15,6 +15,13 @@ import { resolveDomainSource } from "@/lib/domain-source"
 
 export const dynamic = "force-dynamic"
 
+function isNestedSubdomain(domainName: string, allNames: string[]) {
+  return allNames.some(
+    (candidate) =>
+      candidate !== domainName && domainName.endsWith(`.${candidate}`)
+  )
+}
+
 export async function GET() {
   try {
     if (!(await isAdminRequest())) {
@@ -42,18 +49,16 @@ export async function GET() {
 
     const [
       totalUsers,
-      totalDomains,
       totalAddresses,
       activeAddressCount,
       totalVouchers,
       users,
-      domains,
+      allDomains,
       addresses,
       vouchers,
       settings,
     ] = await Promise.all([
       User.countDocuments({}),
-      Domain.countDocuments({}),
       Address.countDocuments({}),
       Address.countDocuments({ expiresAt: { $gt: new Date() } }),
       Voucher.countDocuments({}),
@@ -81,6 +86,12 @@ export async function GET() {
         .lean(),
       getAdminSettings(),
     ])
+
+    const allDomainNames = allDomains.map((domain) => domain.name)
+    const domains = allDomains.filter(
+      (domain) => !isNestedSubdomain(domain.name, allDomainNames)
+    )
+    const totalDomains = domains.length
 
     const ownerIds = domains
       .map((domain) => domain.userId)
