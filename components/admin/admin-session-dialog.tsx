@@ -305,9 +305,11 @@ export default function AdminSessionDialog() {
             <DialogDescription>
               Sign in to access application management tools.
             </DialogDescription>
-            <Button asChild variant="outline" className="mt-2 w-fit">
-              <Link href="/dashboard">Open Backend Console</Link>
-            </Button>
+            {status === "admin" ? (
+              <Button asChild variant="outline" className="mt-2 w-fit">
+                <Link href="/dashboard">Open Backend Console</Link>
+              </Button>
+            ) : null}
           </DialogHeader>
 
           {status === "checking" ? (
@@ -1477,7 +1479,7 @@ function DomainsModule({
                         <SelectItem value="public">Public</SelectItem>
                         <SelectItem
                           value="private"
-                          disabled={!editDomain.owner}
+                          disabled={editDomain.source === "guest"}
                         >
                           Private
                         </SelectItem>
@@ -1487,7 +1489,9 @@ function DomainsModule({
                   <FieldDescription>
                     {editVisibility === "public"
                       ? "Public domains are visible in guest mode and can be used by anyone."
-                      : "Private domains are hidden from guests and only usable by the signed-in owner in /inbox."}
+                      : editDomain.source === "system"
+                        ? "Private system domains are hidden from public access and only usable with an active admin session."
+                        : "Private domains are hidden from guests and only usable by the signed-in owner in /inbox."}
                   </FieldDescription>
                 </Field>
                 <Field>
@@ -1507,7 +1511,9 @@ function DomainsModule({
                   <FieldDescription>
                     {editDomain.owner
                       ? "Private access keeps this domain tied to its owner account."
-                      : "Private access requires an owner account, so system domains stay public here."}
+                      : editDomain.source === "system"
+                        ? "System domains can be made private and will require an active admin session to use."
+                        : "Guest domains cannot be made private."}
                   </FieldDescription>
                 </Field>
                 <Field data-disabled={editVisibility !== "private"}>

@@ -2,6 +2,7 @@ import { resolveMx } from "node:dns/promises"
 import { NextResponse } from "next/server"
 
 import { getAuthUser } from "@/lib/auth"
+import { isAdminRequest } from "@/lib/admin-session"
 import { connectDB, hasMongoConfig } from "@/lib/db"
 import { canSeeDomain } from "@/lib/domain-access"
 import { resolveDomainSource } from "@/lib/domain-source"
@@ -21,11 +22,16 @@ import { Domain as DomainModel } from "@/models/domain.model"
 export async function GET() {
   try {
     const auth = await getAuthUser()
+    const isAdminSession = await isAdminRequest()
 
     if (!hasMongoConfig()) {
       return NextResponse.json(
         mockDomains
-          .filter((domain) => canSeeDomain(domain, auth?.userId ?? null))
+          .filter((domain) =>
+            canSeeDomain(domain, auth?.userId ?? null, new Date(), {
+              isAdminSession,
+            })
+          )
           .map((domain) => ({
             ...domain,
             visibility: domain.visibility ?? "public",
@@ -64,12 +70,22 @@ export async function GET() {
           const privateOwnerId = privateDomainOwners.get(domain.name)
 
           if (privateOwnerId !== undefined) {
+            if (
+              isAdminSession &&
+              resolveDomainSource(domain) === "system" &&
+              domain.visibility === "private"
+            ) {
+              return true
+            }
+
             return Boolean(
               authUserId && domain.userId?.toString() === authUserId
             )
           }
 
-          return canSeeDomain(domain, authUserId)
+          return canSeeDomain(domain, authUserId, new Date(), {
+            isAdminSession,
+          })
         })
         .map((domain) => ({
           id: domain._id.toString(),

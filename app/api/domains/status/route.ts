@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { isAdminRequest } from "@/lib/admin-session"
 import { connectDB, hasMongoConfig } from "@/lib/db"
 import { normalizeDomain } from "@/lib/domain-validation"
 import { resolveDomainSource } from "@/lib/domain-source"
@@ -47,6 +48,7 @@ export async function GET(req: Request) {
 
   if (data && hasMongoConfig()) {
     try {
+      const isAdminSession = await isAdminRequest()
       await connectDB()
 
       const appDomain = await Domain.findOne({
@@ -64,8 +66,11 @@ export async function GET(req: Request) {
         data.built_in = source === "system"
         data.app_domain = appDomain.name
         data.app_source = source
+        data.admin_access = Boolean(
+          isAdminSession && source === "system" && visibility === "private"
+        )
 
-        if (visibility === "private") {
+        if (visibility === "private" && !data.admin_access) {
           data.status_label = "Domain registered for private use only"
         }
       }

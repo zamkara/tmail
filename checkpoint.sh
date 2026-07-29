@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-avatar-branding-guest-polish"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-admin-private-domain-access-fixes"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,25 +28,24 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-feat: add avatar presets and polish guest branding flow
+feat: fix admin-only private system domain access flow
 
 Main changes:
-- add profile avatar preset selection with only `Prem-Cute.webp` and `Prem-King.webp`
-- persist selected avatar across refresh by serializing `avatarPreset` through auth payloads and client store hydration
-- add authenticated profile update API and wire preference form save flow to persist name, email, password, and avatar preset
-- restrict sign up email domains to `gmail.com`, `hotmail.com`, and `outlook.com` with server-side validation
-- update auth form placeholders and keep unsupported email feedback only in notifications
-- polish guest branding by resizing guest banners, linking top-left brand icons back to home, and making footer `Premiumisme` open Telegram
-- refine inbox sidebar brand icon sizing so the logo no longer looks cropped or misaligned
-- include new branding and avatar assets used by guest pages and user settings
+- unify invalid guest email path handling so deployed `/{email}` routes no longer redirect silently and now follow the same validation flow as `?email=...`
+- fix guest domain validation so inactive subdomains are checked against their exact domain status instead of inheriting a valid parent domain
+- allow admin to set `system` domains as `private` from the admin domain editor and remove the old backend restriction that forced them back to `public`
+- restrict `private system` domains so they are only visible and usable when an admin session is active
+- hide `Open Backend Console` for guests and protect `/dashboard` server-side so only active admin sessions can access it
+- update admin domain edit copy to explain `private system` behavior and keep `guest` domains blocked from becoming private
+- remove unused oversized guest banner variant assets from the repo
 
 Testing:
 - [x] `pnpm typecheck`
-- [ ] Verify profile avatar selection saves and still appears after browser refresh
-- [ ] Verify only `gmail.com`, `hotmail.com`, and `outlook.com` can register
-- [ ] Verify guest brand icon and inbox sidebar icon both navigate back to home
-- [ ] Verify guest banners render at the intended size in light and dark modes
-- [ ] Verify footer `Premiumisme` link opens `https://t.me/premiumisme`
+- [ ] Verify invalid `/{email}` routes in production show the same unsupported flow as local `?email=...`
+- [ ] Verify inactive subdomains like `aavc.cqpcut.pro` stay unsupported and do not inherit valid parent status
+- [ ] Verify admin can switch `system` domains between `public` and `private` in the admin Domains editor
+- [ ] Verify `private system` domains are only listed/usable while admin session is active
+- [ ] Verify guests cannot open `Open Backend Console` or access `/dashboard` directly
 EOF
 )
 

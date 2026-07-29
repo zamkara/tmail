@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation"
-
 import GuestHomePage from "@/components/guest/guest-home-page"
 import { isValidDomain, normalizeDomain } from "@/lib/domain-validation"
 
@@ -25,9 +23,5 @@ export default async function EmailShortcutPage({
   params: Promise<{ email: string }>
 }) {
   const { email } = await params
-  const normalizedEmail = normalizeEmailPath(email)
-
-  if (!normalizedEmail) redirect("/")
-
-  return <GuestHomePage initialEmail={normalizedEmail} />
+  return <GuestHomePage initialEmail={normalizeEmailPath(email) ?? email} />
 }
