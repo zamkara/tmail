@@ -233,6 +233,16 @@ function findMatchingDomain(domainPart: string, domains: Domain[]) {
     }) ?? null
 }
 
+function findExactDomain(domainPart: string, domains: Domain[]) {
+  const normalizedPart = normalizeDomain(domainPart)
+  if (!normalizedPart) return null
+
+  return (
+    domains.find((domain) => normalizeDomain(domain.name) === normalizedPart) ??
+    null
+  )
+}
+
 function getDomainLookupCandidates(domainPart: string) {
   const normalizedPart = normalizeDomain(domainPart)
   if (!normalizedPart) return []
@@ -290,8 +300,20 @@ function getGuestDomainAccessMessage(
 
 function isRegisteredPrivateDomain(status: BackendDomainStatus | null) {
   if (!status?.registered) return false
+  if (status.admin_access) return false
 
   return status.visibility === null || status.visibility === "private"
+}
+
+function isDomainStatusAvailable(status: BackendDomainStatus | null) {
+  if (!status) return false
+
+  return (
+    status.active &&
+    status.approved &&
+    status.mx_valid &&
+    !isRegisteredPrivateDomain(status)
+  )
 }
 
 async function fetchJsonWithTimeout<T>(
@@ -469,6 +491,7 @@ export default function GuestMailWorkspace({
     }
 
     const matchedDomain = findMatchingDomain(parsed.domainPart, publicDomains)
+    const exactDomain = findExactDomain(parsed.domainPart, publicDomains)
     if (!matchedDomain) {
       const existingAddress = addresses.find(
         (address) =>
@@ -523,8 +546,8 @@ export default function GuestMailWorkspace({
     const address: GeneratedAddress = {
       id: `url:${parsed.address}`,
       address: parsed.address,
-      domainId: matchedDomain.id,
-      domainName: matchedDomain.name,
+      domainId: exactDomain?.id ?? `url:${parsed.domainPart}`,
+      domainName: exactDomain?.name ?? parsed.domainPart,
       username: null,
       createdAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
@@ -560,13 +583,14 @@ export default function GuestMailWorkspace({
   const activeAddressDomain = activeAddressEmail
     ? getAddressDomain(activeAddressEmail)
     : ""
-  const activeMatchedPublicDomain = activeAddressDomain
-    ? findMatchingDomain(activeAddressDomain, publicDomains)
+  const activeExactPublicDomain = activeAddressDomain
+    ? findExactDomain(activeAddressDomain, publicDomains)
     : null
   const activeDomainUnavailable = Boolean(
     !isLoadingDomains &&
       activeAddressDomain &&
-      !activeMatchedPublicDomain
+      !isLoadingDomainStatus &&
+      (domainStatusError || !isDomainStatusAvailable(domainStatus))
   )
   const domainAccessMessage = getGuestDomainAccessMessage(
     domainStatus,
@@ -617,9 +641,7 @@ export default function GuestMailWorkspace({
       setDomainStatusError(null)
 
       try {
-        const status = activeMatchedPublicDomain
-          ? await fetchDomainStatus(activeMatchedPublicDomain.name)
-          : await fetchBestDomainStatus(activeAddressDomain)
+        const status = await fetchDomainStatus(activeAddressDomain)
         if (!cancelled && domainStatusRequestRef.current === requestId) {
           setDomainStatus(status)
         }
@@ -644,7 +666,7 @@ export default function GuestMailWorkspace({
     return () => {
       cancelled = true
     }
-  }, [activeAddressDomain, activeMatchedPublicDomain])
+  }, [activeAddressDomain])
 
   useEffect(() => {
     if (!authLoaded) return
@@ -657,7 +679,7 @@ export default function GuestMailWorkspace({
       if (!isAddressAvailable(address)) return false
       if (user) return true
 
-      return Boolean(findMatchingDomain(getAddressDomain(address.address), publicDomains))
+      return Boolean(findExactDomain(getAddressDomain(address.address), publicDomains))
     })
     if (reusableAddress) {
       setActiveAddress(reusableAddress.id)
@@ -1076,8 +1098,9 @@ export default function GuestMailWorkspace({
 
     try {
       const matchedDomain = findMatchingDomain(domainPart, publicDomains)
+      const exactDomain = findExactDomain(domainPart, publicDomains)
 
-      if (!matchedDomain) {
+      if (!exactDomain) {
         updateAddress(activeAddress.id, {
           address: `${localPart}@${domainPart}`,
           domainId: `url:${domainPart}`,
@@ -1093,8 +1116,8 @@ export default function GuestMailWorkspace({
 
       updateAddress(activeAddress.id, {
         address: `${localPart}@${domainPart}`,
-        domainId: matchedDomain.id,
-        domainName: matchedDomain.name,
+        domainId: exactDomain.id,
+        domainName: exactDomain.name,
       })
       resetInbox()
       setEditAddress(null)

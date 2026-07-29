@@ -32,6 +32,7 @@ export interface BackendDomainStatus {
   created_at: number | null
   updated_at: number | null
   mx_records?: Array<{ exchange: string; priority: number }>
+  admin_access?: boolean
 }
 
 export interface BackendIncomingDomain {

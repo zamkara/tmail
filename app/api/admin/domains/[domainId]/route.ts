@@ -53,10 +53,6 @@ export async function PATCH(
     patch.source = body.source
     patch.type = body.source === "system" ? "system" : "custom"
     patch.userId = null
-    if (body.source === "system") {
-      patch.visibility = "public"
-      patch.privateUntil = null
-    }
     if (body.source === "guest") {
       patch.visibility = "public"
       patch.privateUntil = null
@@ -66,8 +62,6 @@ export async function PATCH(
     if (body.type === "system") {
       patch.userId = null
       patch.source = "system"
-      patch.visibility = "public"
-      patch.privateUntil = null
     }
   }
 
@@ -79,7 +73,7 @@ export async function PATCH(
     const currentSource =
       (patch.source as string | undefined) ?? resolveDomainSource(existingDomain)
 
-    if (currentSource === "system" || currentSource === "guest") {
+    if (currentSource === "guest") {
       patch.visibility = "public"
       patch.privateUntil = null
     } else {
@@ -116,17 +110,19 @@ export async function PATCH(
     (patch.source as "system" | "user" | "guest" | undefined) ??
     resolveDomainSource(existingDomain)
 
-  if (nextSource !== "user" && nextVisibility === "private") {
+  if (nextSource === "guest" && nextVisibility === "private") {
     return NextResponse.json(
-      { error: "Only user-owned domains can be private" },
+      { error: "Guest domains cannot be private" },
       { status: 400 }
     )
   }
 
   if (nextVisibility === "private") {
-    patch.type = "custom"
+    if (nextSource === "user") {
+      patch.type = "custom"
+    }
 
-    if (!nextUserId) {
+    if (nextSource === "user" && !nextUserId) {
       return NextResponse.json(
         { error: "Private domains must belong to a user account" },
         { status: 400 }

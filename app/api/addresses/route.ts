@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { getAdminSettings } from "@/lib/admin-settings"
+import { isAdminRequest } from "@/lib/admin-session"
 import { getAuthUser } from "@/lib/auth"
 import { connectDB } from "@/lib/db"
 import { canUseDomain } from "@/lib/domain-access"
@@ -85,6 +86,7 @@ export async function POST(req: Request) {
     })
 
     const auth = await getAuthUser()
+    const isAdminSession = await isAdminRequest()
     if (!auth)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -112,7 +114,10 @@ export async function POST(req: Request) {
 
     const domain = await Domain.findById(domainId)
 
-    if (!domain || !canUseDomain(domain, auth.userId)) {
+    if (
+      !domain ||
+      !canUseDomain(domain, auth.userId, new Date(), { isAdminSession })
+    ) {
       return NextResponse.json(
         { error: "Domain tidak tersedia" },
         { status: 404 }

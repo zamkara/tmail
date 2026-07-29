@@ -12,6 +12,10 @@ type DomainAccessInput = {
   userId?: Types.ObjectId | string | null
 }
 
+type DomainAccessOptions = {
+  isAdminSession?: boolean
+}
+
 export function isPrivateActive(domain: DomainAccessInput, now = new Date()) {
   if (domain.visibility !== "private") return false
   if (!domain.privateUntil) return false
@@ -35,11 +39,14 @@ export function isDomainSuspended(domain: DomainAccessInput, now = new Date()) {
 export function canUseDomain(
   domain: DomainAccessInput,
   userId: string | null,
-  now = new Date()
+  now = new Date(),
+  options?: DomainAccessOptions
 ) {
   if (!domain.isVerified || domain.isBanned) return false
-  if (resolveDomainSource(domain) === "system") return true
   if (domain.visibility !== "private") return true
+  if (options?.isAdminSession && resolveDomainSource(domain) === "system") {
+    return true
+  }
   if (!isPrivateActive(domain, now)) return false
 
   return Boolean(userId && domain.userId?.toString() === userId)
@@ -48,11 +55,14 @@ export function canUseDomain(
 export function canSeeDomain(
   domain: DomainAccessInput,
   userId: string | null,
-  now = new Date()
+  now = new Date(),
+  options?: DomainAccessOptions
 ) {
   if (!domain.isVerified || domain.isBanned) return false
-  if (resolveDomainSource(domain) === "system") return true
   if (domain.visibility !== "private") return true
+  if (options?.isAdminSession && resolveDomainSource(domain) === "system") {
+    return true
+  }
 
   return Boolean(userId && domain.userId?.toString() === userId)
 }
