@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-backend-console-stats-and-domain-polish"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-backend-console-maintenance-and-stats"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,12 +28,13 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-feat: expand backend console stats and polish domain handling
+feat: expand backend console maintenance and stats
 
 Main changes:
 - add backend console platform totals for inbox messages, generated emails, active emails, registered domains, valid domains, private domains, incoming domains, valid MX domains, and users
 - add frontend snapshot metrics in backend console for browser connectivity, language, timezone, viewport, device memory, and CPU core count
 - normalize backend `/health` responses in the public proxy so admin health cards correctly interpret `{ api, redis, smtp }` as healthy instead of showing `Down`
+- add a global backend console maintenance action to delete all inbox messages from the database through a dedicated admin proxy route
 - filter nested subdomains out of the admin domain directory so only stored root domains appear in the Domains menu and stats
 - make admin address owner/domain dropdowns render with improved dark-mode colors
 - keep domain status lookup exact-match only so searched domains do not inherit parent or child domain records
@@ -43,6 +44,7 @@ Testing:
 - [x] `pnpm typecheck`
 - [ ] Verify Backend Console `Public Health` shows healthy when `/api/backend/public?path=/health` returns `{ "api":"ok","redis":"ok","smtp":"ok" }`
 - [ ] Verify backend console totals and frontend snapshot cards render expected values
+- [ ] Verify `Delete All Messages` in Backend Console removes inbox data through the backend admin API and refreshes totals afterward
 - [ ] Verify admin Domains menu excludes nested subdomains from the list and count
 - [ ] Verify admin Addresses owner/domain dropdowns are readable in dark mode
 - [ ] Verify logged-in generated email prefixes use 7 lowercase letters only
