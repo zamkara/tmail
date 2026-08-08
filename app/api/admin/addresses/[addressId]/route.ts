@@ -15,7 +15,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ addressId: string }> }
 ) {
-  if (!(await isAdminRequest())) {
+  if (!(await isAdminRequest(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
@@ -111,10 +111,10 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ addressId: string }> }
 ) {
-  if (!(await isAdminRequest())) {
+  if (!(await isAdminRequest(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

@@ -597,10 +597,17 @@ export default function BackendConsolePage() {
               <GlobeIcon className="mr-2 size-4" />
               Domains
             </TabsTrigger>
-            <TabsTrigger value="docs">
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-9 rounded-xl"
+              onClick={() => {
+                window.location.href = "https://api.pusat.email/"
+              }}
+            >
               <FileTextIcon className="mr-2 size-4" />
               Docs
-            </TabsTrigger>
+            </Button>
             <TabsTrigger value="actions">
               <Trash2Icon className="mr-2 size-4" />
               Actions

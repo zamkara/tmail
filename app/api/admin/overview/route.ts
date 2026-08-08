@@ -5,9 +5,11 @@ import {
   DEFAULT_ADMIN_SETTINGS,
   getAdminSettings,
 } from "@/lib/admin-settings"
+import { serializeAdminApiKey } from "@/lib/admin-api-key"
 import { isAdminRequest } from "@/lib/admin-session"
 import { connectDB, hasMongoConfig } from "@/lib/db"
 import { Address } from "@/models/address.model"
+import { AdminApiKey } from "@/models/admin-api-key.model"
 import { Domain } from "@/models/domain.model"
 import { User } from "@/models/user.model"
 import { Voucher } from "@/models/voucher.model"
@@ -22,9 +24,9 @@ function isNestedSubdomain(domainName: string, allNames: string[]) {
   )
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    if (!(await isAdminRequest())) {
+    if (!(await isAdminRequest(req))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -41,6 +43,7 @@ export async function GET() {
         domains: [],
         addresses: [],
         vouchers: [],
+        apiKeys: [],
         settings: DEFAULT_ADMIN_SETTINGS,
       })
     }
@@ -56,6 +59,7 @@ export async function GET() {
       allDomains,
       addresses,
       vouchers,
+      apiKeys,
       settings,
     ] = await Promise.all([
       User.countDocuments({}),
@@ -82,6 +86,12 @@ export async function GET() {
         .sort({ createdAt: -1 })
         .select(
           "_id code durationDays privateDomainLimit maxUses usedCount expiresAt isActive note createdAt updatedAt"
+        )
+        .lean(),
+      AdminApiKey.find({})
+        .sort({ createdAt: -1 })
+        .select(
+          "_id name key isActive whitelistIps blacklistIps lastUsedAt lastUsedIp useCount createdAt updatedAt"
         )
         .lean(),
       getAdminSettings(),
@@ -232,6 +242,7 @@ export async function GET() {
         createdAt: voucher.createdAt,
         updatedAt: voucher.updatedAt,
       })),
+      apiKeys: apiKeys.map((apiKey) => serializeAdminApiKey(apiKey)),
       settings,
     })
   } catch (error) {

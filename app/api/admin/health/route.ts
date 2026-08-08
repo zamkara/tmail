@@ -5,8 +5,8 @@ import { connectDB, hasMongoConfig } from "@/lib/db"
 
 export const dynamic = "force-dynamic"
 
-export async function GET() {
-  if (!(await isAdminRequest())) {
+export async function GET(req: Request) {
+  if (!(await isAdminRequest(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

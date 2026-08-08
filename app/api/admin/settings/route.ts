@@ -8,8 +8,8 @@ import { isAdminRequest } from "@/lib/admin-session"
 import { connectDB } from "@/lib/db"
 import { AdminSettings } from "@/models/admin-settings.model"
 
-export async function GET() {
-  if (!(await isAdminRequest())) {
+export async function GET(req: Request) {
+  if (!(await isAdminRequest(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
@@ -18,7 +18,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
-  if (!(await isAdminRequest())) {
+  if (!(await isAdminRequest(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

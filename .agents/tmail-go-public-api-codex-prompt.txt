@@ -1,0 +1,759 @@
+PROMPT UNTUK CODEX
+
+Saya ingin Anda membangun service/public API Golang untuk project TMail, tetapi implementasinya dibuat di repo lain yang terpisah dari repo `tmail` ini.
+Service harus berjalan di server yang sama dengan backend temporary email ini agar latensi rendah dan tidak perlu memanggil backend HTTP internal untuk membaca pesan.
+
+Target utama:
+- buat API publik Golang untuk akses domain, validasi/create email, fetch messages, dan delete message
+- API key dibaca dari database MongoDB TMail, bukan hardcode
+- API key admin bersifat unlimited tanpa expiry time
+- API key bisa aktif/nonaktif
+- API key mendukung whitelist IP dan blacklist IP
+- default jika whitelist dan blacklist kosong: semua IP boleh
+- service Go harus membaca inbox langsung dari Redis dan file storage lokal, bukan memanggil endpoint backend message
+- tetap perhatikan desain project yang sudah ada dan jangan merusak aplikasi Next.js yang sekarang
+
+================================================================================
+1. KONTEKS REPO DAN BATASAN
+================================================================================
+
+Repo `tmail` ini adalah project referensi berbasis Next.js + MongoDB + Redis.
+Repo ini hanya dipakai untuk membaca schema aktual, env yang dipakai, key Redis, behavior domain/inbox, dan pola deploy target.
+Implementasi service Go, Dockerfile, deploy script Go, dan folder `docs/` harus dibuat di repo Go yang terpisah.
+Sudah ada fitur admin session, admin API key MongoDB, guest email context, domain management, voucher, inbox, dll.
+
+Penting:
+- Jangan memindahkan logic aplikasi utama Next.js ke Go.
+- Service Go adalah tambahan terpisah yang hidup berdampingan dengan app saat ini.
+- Service Go harus dipasang dan dideploy di server yang sama agar bisa membaca Redis dan folder email storage langsung.
+- Service Go tidak boleh memakai port 8901.
+- Pilih port default lain, misalnya 8911, kecuali ada alasan teknis yang lebih baik.
+
+Yang boleh diubah:
+- baca codebase repo `tmail` ini untuk memahami schema, key Redis, env, dan behavior yang harus diikuti
+- implementasikan service Go di repo lain
+- tambah Dockerfile/Containerfile/service file di repo Go bila perlu
+- tambah script deploy khusus untuk service Go di repo Go
+- tambah dokumentasi penggunaan di repo Go
+- tambah route/handler di service Go
+- tambah helper Mongo/Redis/config parsing di Go
+
+Yang tidak boleh dilakukan:
+- jangan menaruh implementasi service Go final di repo `tmail` ini
+- jangan menghapus alur backend yang sudah ada
+- jangan mengganti deployment app utama yang existing kecuali memang perlu integrasi kecil
+- jangan membuat service Go bergantung pada endpoint HTTP internal untuk fetch inbox
+- jangan pakai websocket untuk API ini
+
+================================================================================
+2. TUJUAN PUBLIC API YANG HARUS DIBUAT
+================================================================================
+
+Buat public API Golang dengan endpoint berikut:
+
+1. List Domains
+GET https://yourdomain.com/api/domains/[apikey]
+
+2. Create Email
+GET https://yourdomain.com/api/email/[email]/[apikey]
+
+3. Fetch Messages
+GET https://yourdomain.com/api/messages/[email]/[apikey]
+
+4. Delete Message
+DELETE https://yourdomain.com/api/message/[message_id]/[apikey]
+
+Catatan:
+- endpoint path harus persis seperti format di atas
+- apikey diambil dari path
+- email diambil dari path
+- service harus return JSON konsisten dan cepat
+- gunakan lowercase/sanitized email
+
+================================================================================
+3. PILIHAN STACK GOLANG
+================================================================================
+
+Pilih stack Go yang sederhana, stabil, dan latensi rendah.
+Pilihan yang disarankan:
+
+- Go standard net/http
+- github.com/go-chi/chi/v5 untuk router
+- github.com/redis/go-redis/v9 untuk Redis
+- go.mongodb.org/mongo-driver/mongo untuk MongoDB
+- github.com/joho/godotenv untuk load .env
+
+Alasan:
+- ringan
+- cepat
+- dependency minim
+- mudah dideploy
+- observability dan debugging mudah
+
+Jangan pilih framework berat kalau tidak ada kebutuhan nyata.
+
+================================================================================
+4. LOKASI IMPLEMENTASI YANG DIINGINKAN
+================================================================================
+
+Saya ingin service Go di repo terpisah tetap dipisah rapi, misalnya:
+
+go-api/
+  cmd/tmail-api/main.go
+  internal/config/
+  internal/httpapi/
+  internal/auth/
+  internal/mongoapi/
+  internal/inbox/
+  internal/domain/
+  internal/storage/
+  internal/models/
+  internal/state/
+  go.mod
+  go.sum
+  Dockerfile
+
+Jika Anda punya struktur yang lebih baik, boleh, asal tetap rapi, production-ready, dan jelas.
+Folder `docs/` yang disebut di prompt ini merujuk ke repo Go yang terpisah, bukan repo `tmail` ini.
+
+================================================================================
+5. SUMBER DATA YANG HARUS DIPAKAI
+================================================================================
+
+Service Go harus membaca langsung dari:
+
+1. MongoDB
+Dipakai untuk:
+- validasi API key
+- membaca domain yang boleh tampil public
+- bila perlu membaca metadata domain/user/admin key
+
+2. Redis
+Dipakai untuk:
+- membaca inbox summary dari key inbox:{email}
+- membaca index path detail message dari key message_file:{id}
+
+3. File storage lokal
+Dipakai untuk:
+- fallback baca detail message JSON
+- fallback cari file {id}.json jika Redis key message_file:{id} tidak ada
+
+Jangan:
+- jangan hit HTTP `/api/inbox`
+- jangan hit HTTP `/api/domains`
+- jangan hit endpoint admin
+- jangan hit websocket
+
+================================================================================
+6. API KEY: ATURAN VALIDASI
+================================================================================
+
+API key harus dibaca dari MongoDB yang sama dengan TMail.
+
+Gunakan model data yang konsisten dengan implementasi admin API key yang sudah ada di repo:
+
+Field penting:
+- name
+- key
+- isActive
+- whitelistIps
+- blacklistIps
+- lastUsedAt
+- lastUsedIp
+- useCount
+- createdAt
+- updatedAt
+
+Aturan validasi API key:
+
+1. Cari document Mongo berdasarkan field key yang persis sama.
+2. API key wajib aktif: isActive == true.
+3. API key ini unlimited, jadi tidak punya expiry time.
+4. Jika whitelistIps kosong:
+   - semua IP boleh, kecuali diblok oleh blacklist
+5. Jika whitelistIps berisi data:
+   - hanya IP yang ada di whitelist yang boleh
+6. Jika blacklistIps mengandung IP request:
+   - selalu tolak
+7. Setiap request valid harus meng-update:
+   - lastUsedAt
+   - lastUsedIp
+   - useCount = useCount + 1
+
+Prioritas rule:
+- blacklist menang atas whitelist
+
+IP client harus dideteksi dari header berikut, berurutan:
+- x-forwarded-for (pakai IP pertama)
+- cf-connecting-ip
+- x-real-ip
+- true-client-ip
+- forwarded
+
+Response kalau API key invalid:
+- HTTP 401 Unauthorized
+- JSON error yang jelas
+
+Contoh:
+{
+  "error": "invalid api key"
+}
+
+Atau:
+{
+  "error": "ip not allowed"
+}
+
+================================================================================
+7. DOMAINS: ATURAN LIST PUBLIC
+================================================================================
+
+Endpoint:
+GET /api/domains/:apikey
+
+Harus return domain-domain public yang valid untuk digunakan.
+
+Aturan:
+- ambil dari MongoDB Domain collection
+- jangan tampilkan nested subdomain yang hanya turunan root domain
+- hanya tampilkan domain yang memang layak untuk public use
+- hindari menampilkan private domains
+- hindari menampilkan domain banned
+- hindari menampilkan domain yang tidak verified
+
+Kalau repo sudah punya rule domain visibility di code TypeScript, tiru behavior existing semirip mungkin di Go.
+Kalau perlu, baca logic existing dari codebase dan ikuti.
+
+Contoh response:
+{
+  "domains": [
+    "acnokyeu.my.id",
+    "faeeisys.my.id",
+    "rmjhtgiq.web.id"
+  ]
+}
+
+Pastikan urutan stabil, misalnya alphabetical ascending.
+
+================================================================================
+8. CREATE EMAIL: ATURAN SANITIZE DAN VALIDASI
+================================================================================
+
+Endpoint:
+GET /api/email/:email/:apikey
+
+Tujuan endpoint ini:
+- menerima email dari user
+- validate
+- sanitize
+- return email final yang valid
+
+Aturan email:
+- trim spasi
+- lowercase
+- local-part valid
+- domain valid
+
+Kalau domain adalah subdomain yang tidak tersimpan di Mongo, tetap boleh dipakai jika memang valid secara domain status / aturan existing TMail.
+Tetapi jangan otomatis menyimpan subdomain sebagai root domain baru bila behavior existing memang tidak melakukan itu.
+
+Tiru behavior existing TMail seakurat mungkin:
+- root domain disimpan/list
+- subdomain bisa tetap dipakai bila memang valid
+
+Response minimal:
+{
+  "success": true,
+  "email": "sanitized@example.com",
+  "domain": "example.com",
+  "local_part": "sanitized"
+}
+
+Jika invalid:
+- return HTTP 400
+- JSON error jelas
+
+================================================================================
+9. FETCH MESSAGES: SUMBER DATA DAN LOGIC
+================================================================================
+
+Endpoint:
+GET /api/messages/:email/:apikey
+
+INI BAGIAN PALING PENTING.
+
+Service Go harus membaca inbox message langsung dari storage internal:
+
+1. Redis list:
+   inbox:{email}
+
+2. Redis string:
+   message_file:{message_id}
+
+3. Fallback file search:
+   EMAIL_STORAGE_DIR recursively
+
+Email wajib dinormalisasi:
+- trim
+- lowercase
+
+Redis list yang dipakai:
+- LRANGE inbox:{email} 0 {INBOX_MAX_MESSAGES-1}
+
+Default:
+- 0..19 jika env tidak ada
+
+Setiap item list adalah JSON summary.
+Minimal field yang harus dibaca:
+- id
+- from
+- subject
+- timestamp
+- is_otp
+- otp
+
+Jika summary lama belum punya field is_otp atau otp:
+- baca detail file message
+- ambil field is_otp dan otp dari detail
+- merge hasilnya
+
+Struct yang disarankan:
+
+type rawInboxMessage struct {
+    ID        string  `json:"id"`
+    From      string  `json:"from"`
+    Subject   string  `json:"subject"`
+    Timestamp int64   `json:"timestamp"`
+    IsOTP     *bool   `json:"is_otp"`
+    OTP       *string `json:"otp"`
+}
+
+type InboxMessage struct {
+    ID        string  `json:"id"`
+    From      string  `json:"from"`
+    Subject   string  `json:"subject"`
+    Timestamp int64   `json:"timestamp"`
+    IsOTP     bool    `json:"is_otp"`
+    OTP       *string `json:"otp"`
+}
+
+type MessageDetail struct {
+    ID        string   `json:"id"`
+    From      string   `json:"from"`
+    To        []string `json:"to"`
+    Subject   string   `json:"subject"`
+    Text      string   `json:"text"`
+    HTML      string   `json:"html"`
+    Raw       string   `json:"raw"`
+    CreatedAt int64    `json:"created_at"`
+    IsOTP     bool     `json:"is_otp"`
+    OTP       *string  `json:"otp"`
+}
+
+Response minimal:
+{
+  "email": "abc@example.com",
+  "messages": [
+    {
+      "id": "uuid",
+      "from": "Service <no-reply@example.com>",
+      "subject": "Your verification code",
+      "timestamp": 1710000000000,
+      "is_otp": true,
+      "otp": "123456"
+    }
+  ]
+}
+
+Urutan:
+- terbaru di depan
+
+Jangan bikin polling di server untuk endpoint ini.
+Endpoint cukup one-shot fetch.
+Polling nanti dilakukan oleh client/script pemakai API bila perlu.
+
+================================================================================
+10. DELETE MESSAGE: IMPLEMENTASI
+================================================================================
+
+Endpoint:
+DELETE /api/message/:message_id/:apikey
+
+Yang saya inginkan:
+- hapus message tertentu dengan id tersebut dari inbox storage internal
+
+Implementasi minimal yang diterima:
+
+1. Cari semua inbox Redis list yang mungkin berisi message summary itu.
+2. Atau jika ada struktur index yang lebih efisien di backend saat ini, gunakan itu.
+3. Hapus summary dari Redis list terkait.
+4. Hapus detail file JSON jika ada.
+5. Hapus key Redis message_file:{id} jika ada.
+
+Jika repo existing punya mekanisme lain yang lebih benar, ikuti mekanisme yang paling aman.
+
+Kalau delete penuh lintas semua inbox terlalu mahal, boleh implementasi pragmatis:
+- scan key inbox:* secukupnya
+- remove message summary matching id
+- delete detail file
+- delete message_file key
+
+Response:
+{
+  "ok": true,
+  "message_id": "uuid"
+}
+
+Jika tidak ditemukan:
+{
+  "ok": false,
+  "error": "message not found"
+}
+
+================================================================================
+11. ENVIRONMENT DAN KONFIGURASI
+================================================================================
+
+Service Go harus membaca env yang sama dengan backend.
+Load `.env` jika ada, tapi env process harus tetap menang.
+
+Minimal env yang harus dibaca:
+
+Mongo:
+- MONGODB_URI
+
+Redis/storage:
+- REDIS_HOST
+- REDIS_PORT
+- REDIS_PASSWORD
+- REDIS_URL
+- EMAIL_STORAGE_DIR
+- EMAIL_TTL_SECONDS
+- INBOX_MAX_MESSAGES
+
+Go API sendiri:
+- TM_PUBLIC_API_PORT
+- TM_PUBLIC_API_HOST
+- TM_PUBLIC_API_READ_TIMEOUT
+- TM_PUBLIC_API_WRITE_TIMEOUT
+- TM_PUBLIC_API_SHUTDOWN_TIMEOUT
+- TM_PUBLIC_API_LOG_JSON
+
+Default yang disarankan:
+- TM_PUBLIC_API_PORT=8911
+- TM_PUBLIC_API_HOST=0.0.0.0
+- TM_PUBLIC_API_READ_TIMEOUT=5s
+- TM_PUBLIC_API_WRITE_TIMEOUT=10s
+- TM_PUBLIC_API_SHUTDOWN_TIMEOUT=10s
+- INBOX_MAX_MESSAGES=20
+
+Redis config priority:
+1. parse REDIS_URL jika ada
+2. fallback ke REDIS_HOST/REDIS_PORT/REDIS_PASSWORD
+3. jika REDIS_URL tidak punya password tapi REDIS_PASSWORD ada, pakai REDIS_PASSWORD
+
+EMAIL_STORAGE_DIR:
+- resolve relatif terhadap working directory service
+- dukung absolute path
+
+================================================================================
+12. MONGODB COLLECTION DAN KOMPATIBILITAS
+================================================================================
+
+Pelajari schema Mongo yang ada di repo ini, terutama:
+- admin-api-key
+- domain
+- user bila perlu
+
+Jangan mengasumsikan nama collection yang salah.
+Gunakan nama collection actual dari model Mongoose yang ada di repo saat ini.
+
+Untuk API key:
+- pastikan field yang dibaca kompatibel dengan schema yang sekarang
+- jangan menambah expiry requirement karena key admin di sini unlimited
+
+================================================================================
+13. STRUKTUR RESPONSE JSON
+================================================================================
+
+Semua response JSON harus konsisten.
+
+Sukses:
+- return object, bukan plain text
+
+Error:
+- selalu ada field `error`
+
+Contoh error:
+{
+  "error": "invalid api key"
+}
+
+Contoh health internal bila Anda menambah endpoint optional:
+{
+  "ok": true,
+  "redis": "ok",
+  "mongo": "ok",
+  "storage": "ok"
+}
+
+Endpoint health ini optional, tapi bagus jika ada:
+- GET /healthz
+
+================================================================================
+14. OBSERVABILITY
+================================================================================
+
+Tambahkan logging yang rapi:
+- request method
+- path
+- status
+- latency
+- client IP
+- api key name jika valid
+
+Jangan pernah log key API utuh.
+Kalau perlu log, mask jadi sebagian saja.
+
+Tambahkan graceful shutdown.
+Tambahkan context timeout untuk Mongo dan Redis.
+
+================================================================================
+15. DEPLOYMENT KE VPS DENGAN PODMAN
+================================================================================
+
+Saya ingin deployment service Go ini mengikuti pola blue-green Podman yang mirip script referensi di bawah, tetapi:
+- service Go harus punya script deploy sendiri
+- jangan pakai port 8901
+- pakai port lain, default 8911
+
+Nama script yang disarankan:
+- deploy-go-api.sh
+
+Nama image/container yang disarankan:
+- IMAGE_NAME=tmail-go-api
+- CONTAINER_NAME=tmail-go-api
+- HOST_PORT=8911
+- CONTAINER_PORT=8911
+
+Harus:
+- build image Podman
+- start container baru di temp port
+- health check dulu
+- swap ke port final
+- cleanup image/container lama
+- summary deploy mirip script referensi
+
+Env files:
+- baca `.env`
+- baca `.env.local`
+- pass-through `TM_` prefixed env bila perlu
+- pastikan MONGODB_URI, REDIS_URL, EMAIL_STORAGE_DIR bisa masuk ke container
+
+Jika perlu volume mount storage email:
+- mount folder email backend ke container service Go
+
+Tambahkan Dockerfile/Containerfile khusus service Go.
+Pilih base image yang ringan dan stabil.
+Prioritaskan multi-stage build kecil.
+
+================================================================================
+16. PUSH / CHECKPOINT FLOW
+================================================================================
+
+Sesuaikan juga workflow commit/checkpoint menggunakan referensi checkpoint ini:
+- branch auto format feat/TMAIL-{DDMMYYHHMM}-{slug}
+- stage all
+- commit message harus merangkum fitur public Go API, API key auth, direct Redis/file inbox access, dan deployment script service Go
+
+Tolong buat atau update script checkpoint yang relevan untuk perubahan service Go ini jika memang diperlukan.
+Kalau project lebih cocok tetap pakai checkpoint.sh yang ada, update isinya agar sesuai perubahan.
+
+Commit message harus mencakup:
+- public Go API endpoints
+- Mongo-backed admin API key validation
+- direct Redis/file inbox reads
+- Podman deploy for Go service on non-8901 port
+- testing checklist
+
+================================================================================
+17. FITUR DETAIL YANG HARUS ADA
+================================================================================
+
+Harus ada:
+- config loader
+- Mongo client
+- Redis client
+- domain listing endpoint
+- email sanitize endpoint
+- messages fetch endpoint
+- message delete endpoint
+- admin API key middleware from Mongo
+- whitelist/blacklist IP logic
+- lastUsedAt / lastUsedIp / useCount update
+- direct Redis inbox summary decoding
+- file fallback for old OTP data
+- clear README/running instruction
+- dokumentasi lengkap di folder `docs/`
+- contoh client JavaScript di `docs/`
+- contoh client Python di `docs/`
+- Podman deploy script
+
+Bagus jika ada:
+- health endpoint
+- structured logging
+- unit tests untuk normalize email, api key IP rule, redis url parse
+
+================================================================================
+18. PERFORMANCE DAN LATENSI
+================================================================================
+
+Optimasi yang saya inginkan:
+- reuse Mongo client singleton
+- reuse Redis client singleton
+- gunakan timeout yang wajar
+- untuk detail message fallback, pakai Redis message_file key dulu
+- file scan hanya fallback terakhir
+- jika scan file menemukan path, boleh cache kembali ke Redis `message_file:{id}`
+- minimalkan allocation yang tidak perlu
+
+Jangan membuat desain yang terlalu overengineered.
+Fokus ke path cepat:
+- validate key
+- fetch messages dari Redis
+- fallback file hanya saat field OTP lama tidak ada
+
+================================================================================
+19. ACCEPTANCE CRITERIA
+================================================================================
+
+Implementasi dianggap selesai jika:
+
+1. Service Go bisa jalan lokal dan di server
+2. `GET /api/domains/:apikey` bekerja
+3. `GET /api/email/:email/:apikey` bekerja
+4. `GET /api/messages/:email/:apikey` membaca langsung dari Redis/file internal
+5. `DELETE /api/message/:message_id/:apikey` bekerja
+6. API key diambil dari MongoDB
+7. API key inactive ditolak
+8. whitelist/blacklist IP berjalan benar
+9. key usage update berjalan
+10. tidak ada dependency ke HTTP API backend untuk inbox read
+11. ada deploy script Podman di port selain 8901
+12. ada dokumentasi lengkap di folder `docs/`
+13. ada contoh pemakaian API dari JavaScript dan Python
+13. type/build/test yang relevan lolos
+
+================================================================================
+20. DOKUMENTASI WAJIB DI /docs
+================================================================================
+
+Selain implementasi code, Anda WAJIB membuat dokumentasi lengkap di folder:
+
+docs/
+
+Folder `docs/` ini harus berada di repo Go yang terpisah.
+
+Minimal file yang harus dibuat:
+
+1. docs/go-public-api-overview.md
+- arsitektur service Go
+- alasan pemilihan stack
+- hubungan service Go dengan app utama, Mongo, Redis, dan email storage
+
+2. docs/go-public-api-installation.md
+- cara run lokal
+- env yang dibutuhkan
+- cara build binary
+- cara run dengan `.env`
+- cara run dengan Podman
+
+3. docs/go-public-api-deployment.md
+- cara deploy ke VPS
+- cara pakai script deploy Podman
+- port default service Go
+- cara mount storage email
+- cara pass env Mongo/Redis/storage
+- cara health check service
+- cara rollback dasar bila deploy gagal
+
+4. docs/go-public-api-endpoints.md
+- dokumentasi semua endpoint:
+  - GET /api/domains/:apikey
+  - GET /api/email/:email/:apikey
+  - GET /api/messages/:email/:apikey
+  - DELETE /api/message/:message_id/:apikey
+- dokumentasi ini harus disiapkan agar bisa dipublish/dirujuk dari `https://api.pusat.email/`
+- contoh request
+- contoh response sukses
+- contoh response error
+- status code
+- penjelasan sanitasi email
+- penjelasan fetch message langsung dari Redis/file
+
+5. docs/go-public-api-auth.md
+- cara kerja admin API key dari MongoDB
+- rule active/inactive
+- whitelist IP
+- blacklist IP
+- prioritas blacklist vs whitelist
+- header/IP detection behavior
+- update lastUsedAt / lastUsedIp / useCount
+
+6. docs/go-public-api-javascript.md
+- contoh lengkap pemakaian dari JavaScript/Node.js
+- gunakan `fetch`
+- contoh:
+  - list domains
+  - create email
+  - fetch messages
+  - delete message
+- contoh error handling
+
+7. docs/go-public-api-python.md
+- contoh lengkap pemakaian dari Python
+- gunakan `requests`
+- contoh:
+  - list domains
+  - create email
+  - fetch messages
+  - delete message
+- contoh error handling
+
+8. docs/go-public-api-troubleshooting.md
+- Mongo gagal connect
+- Redis gagal connect
+- storage path salah
+- API key invalid
+- IP not allowed
+- inbox kosong
+- file detail message tidak ditemukan
+- Podman deploy gagal
+
+Standar dokumentasi:
+- ringkas tapi lengkap
+- pakai markdown
+- semua contoh URL pakai domain publik konsisten `https://api.pusat.email/` bila sedang menunjukkan docs/base URL public
+- semua contoh key pakai placeholder, jangan key real
+- sertakan contoh curl, JavaScript, dan Python pada endpoint utama bila relevan
+
+================================================================================
+21. OUTPUT YANG SAYA MAU DARI ANDA
+================================================================================
+
+Saya ingin Anda:
+
+1. scan codebase repo referensi `tmail` dulu
+2. tentukan schema Mongo yang actual
+3. implement service Go secara lengkap di repo Go yang terpisah
+4. implement deploy script Podman untuk service Go di repo Go yang terpisah
+5. implement/update checkpoint flow yang relevan di repo Go yang terpisah
+6. buat dokumentasi lengkap di folder `docs/` pada repo Go yang terpisah
+7. sertakan contoh JavaScript dan Python di `docs/`
+8. jalankan verifikasi yang masuk akal
+9. jelaskan file mana saja yang ditambah/diubah di repo Go
+10. jelaskan cara menjalankan lokal
+11. jelaskan cara deploy ke VPS
+
+Jika ada asumsi penting, tulis jelas.
+Kalau ada area ambiguous, pilih pendekatan yang paling pragmatis dan production-ready.

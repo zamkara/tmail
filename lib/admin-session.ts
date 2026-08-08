@@ -1,5 +1,6 @@
 import { jwtVerify, SignJWT } from "jose"
 import { cookies } from "next/headers"
+import { authenticateAdminApiKey } from "@/lib/admin-api-key"
 
 export const ADMIN_COOKIE = "tmail_admin_session"
 
@@ -32,7 +33,11 @@ export async function verifyAdminSession(token: string | undefined) {
   }
 }
 
-export async function isAdminRequest() {
+export async function isAdminRequest(req?: Request) {
+  if (req && (await authenticateAdminApiKey(req))) {
+    return true
+  }
+
   const cookieStore = await cookies()
   return verifyAdminSession(cookieStore.get(ADMIN_COOKIE)?.value)
 }

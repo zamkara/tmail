@@ -996,6 +996,17 @@ function ApiKeyContent({ open }: { open: boolean }) {
             ? `Prefix: ${authUser.apiKeyPrefix}...`
             : "No API key generated yet."}
         </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          API docs:{" "}
+          <a
+            href="https://api.pusat.email/"
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-foreground underline underline-offset-4"
+          >
+            api.pusat.email
+          </a>
+        </p>
         {isLoadingKey ? (
           <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
             <Spinner className="size-4" />

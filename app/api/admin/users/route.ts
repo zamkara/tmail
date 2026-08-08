@@ -10,7 +10,7 @@ function normalizeEmail(value: unknown) {
 }
 
 export async function POST(req: Request) {
-  if (!(await isAdminRequest())) {
+  if (!(await isAdminRequest(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

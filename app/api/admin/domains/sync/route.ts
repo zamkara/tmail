@@ -5,8 +5,8 @@ import { connectDB, hasMongoConfig } from "@/lib/db"
 import { syncSystemDomainsFromEmailApi } from "@/lib/system-domains"
 import { Domain } from "@/models/domain.model"
 
-export async function POST() {
-  if (!(await isAdminRequest())) {
+export async function POST(req: Request) {
+  if (!(await isAdminRequest(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
