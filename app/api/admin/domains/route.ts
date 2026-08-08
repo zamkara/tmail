@@ -7,7 +7,7 @@ import { resolveDomainSource } from "@/lib/domain-source"
 import { Domain } from "@/models/domain.model"
 
 export async function POST(req: Request) {
-  if (!(await isAdminRequest())) {
+  if (!(await isAdminRequest(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

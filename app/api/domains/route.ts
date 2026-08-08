@@ -17,6 +17,13 @@ import { syncSystemDomainsFromEmailApi } from "@/lib/system-domains"
 import { mockDomains } from "@/mock/domains"
 import { Domain as DomainModel } from "@/models/domain.model"
 
+function isNestedSubdomain(domainName: string, allNames: string[]) {
+  return allNames.some(
+    (candidate) =>
+      candidate !== domainName && domainName.endsWith(`.${candidate}`)
+  )
+}
+
 // GET /api/domains — semua domain dibaca dari MongoDB.
 // Kalau belum ada system domain di DB, import sekali dari backend email API.
 export async function GET() {
@@ -25,12 +32,19 @@ export async function GET() {
     const isAdminSession = await isAdminRequest()
 
     if (!hasMongoConfig()) {
+      const visibleMockDomains = mockDomains.filter((domain) =>
+        canSeeDomain(domain, auth?.userId ?? null, new Date(), {
+          isAdminSession,
+        })
+      )
+      const visibleMockDomainNames = visibleMockDomains.map(
+        (domain) => domain.name
+      )
+
       return NextResponse.json(
-        mockDomains
-          .filter((domain) =>
-            canSeeDomain(domain, auth?.userId ?? null, new Date(), {
-              isAdminSession,
-            })
+        visibleMockDomains
+          .filter(
+            (domain) => !isNestedSubdomain(domain.name, visibleMockDomainNames)
           )
           .map((domain) => ({
             ...domain,
@@ -64,29 +78,32 @@ export async function GET() {
       }
     }
 
+    const visibleDomains = domains.filter((domain) => {
+      const privateOwnerId = privateDomainOwners.get(domain.name)
+
+      if (privateOwnerId !== undefined) {
+        if (
+          isAdminSession &&
+          resolveDomainSource(domain) === "system" &&
+          domain.visibility === "private"
+        ) {
+          return true
+        }
+
+        return Boolean(authUserId && domain.userId?.toString() === authUserId)
+      }
+
+      return canSeeDomain(domain, authUserId, new Date(), {
+        isAdminSession,
+      })
+    })
+    const visibleDomainNames = visibleDomains.map((domain) => domain.name)
+
     return NextResponse.json(
-      domains
-        .filter((domain) => {
-          const privateOwnerId = privateDomainOwners.get(domain.name)
-
-          if (privateOwnerId !== undefined) {
-            if (
-              isAdminSession &&
-              resolveDomainSource(domain) === "system" &&
-              domain.visibility === "private"
-            ) {
-              return true
-            }
-
-            return Boolean(
-              authUserId && domain.userId?.toString() === authUserId
-            )
-          }
-
-          return canSeeDomain(domain, authUserId, new Date(), {
-            isAdminSession,
-          })
-        })
+      visibleDomains
+        .filter(
+          (domain) => !isNestedSubdomain(domain.name, visibleDomainNames)
+        )
         .map((domain) => ({
           id: domain._id.toString(),
           name: domain.name,

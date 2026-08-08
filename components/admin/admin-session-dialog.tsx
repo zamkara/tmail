@@ -114,6 +114,20 @@ interface AdminSettings {
   blockedSenderDomains: string[]
 }
 
+interface AdminApiKey {
+  id: string
+  name: string
+  key: string
+  isActive: boolean
+  whitelistIps: string[]
+  blacklistIps: string[]
+  lastUsedAt: string | null
+  lastUsedIp: string | null
+  useCount: number
+  createdAt: string
+  updatedAt: string
+}
+
 interface AdminAddress {
   id: string
   address: string
@@ -157,6 +171,7 @@ interface AdminOverview {
   domains: AdminDomain[]
   addresses: AdminAddress[]
   vouchers: AdminVoucher[]
+  apiKeys: AdminApiKey[]
   settings: AdminSettings
 }
 
@@ -704,6 +719,81 @@ function AdminPanel({
     }
   }
 
+  async function createAdminApiKey(payload: {
+    name: string
+    key?: string
+    isActive: boolean
+    whitelistIps: string[]
+    blacklistIps: string[]
+  }) {
+    setIsSaving(true)
+    try {
+      const res = await fetch("/api/admin/api-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      await readJsonResponse<AdminApiKey>(res)
+      toast.success("API key created")
+      await loadOverview()
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create API key"
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function updateAdminApiKey(
+    keyId: string,
+    payload: {
+      name: string
+      key: string
+      isActive: boolean
+      whitelistIps: string[]
+      blacklistIps: string[]
+    }
+  ) {
+    setIsSaving(true)
+    try {
+      const res = await fetch(`/api/admin/api-keys/${keyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      await readJsonResponse<AdminApiKey>(res)
+      toast.success("API key updated")
+      await loadOverview()
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update API key"
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function deleteAdminApiKey(keyId: string) {
+    if (!window.confirm("Delete this admin API key?")) return
+
+    setIsSaving(true)
+    try {
+      const res = await fetch(`/api/admin/api-keys/${keyId}`, {
+        method: "DELETE",
+      })
+      await readJsonResponse<{ ok: boolean }>(res)
+      toast.success("API key deleted")
+      await loadOverview()
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete API key"
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   async function updateVoucher(
     voucherId: string,
     payload: {
@@ -793,7 +883,7 @@ function AdminPanel({
           </div>
         </div>
 
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 rounded-lg bg-muted/40 p-1 md:grid-cols-6">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 rounded-lg bg-muted/40 p-1 md:grid-cols-7">
           <TabsTrigger value="overview">
             <GaugeIcon data-icon="inline-start" />
             Overview
@@ -813,6 +903,10 @@ function AdminPanel({
           <TabsTrigger value="vouchers">
             <TicketIcon data-icon="inline-start" />
             Vouchers
+          </TabsTrigger>
+          <TabsTrigger value="api-keys">
+            <ShieldIcon data-icon="inline-start" />
+            API Keys
           </TabsTrigger>
           <TabsTrigger value="limits">
             <ShieldIcon data-icon="inline-start" />
@@ -906,6 +1000,15 @@ function AdminPanel({
                 onBulkCreate={bulkCreateVouchers}
                 onUpdate={updateVoucher}
                 onDelete={deleteVoucher}
+              />
+            </TabsContent>
+            <TabsContent value="api-keys" className="mt-0">
+              <ApiKeysModule
+                apiKeys={overview.apiKeys}
+                disabled={isSaving}
+                onCreate={createAdminApiKey}
+                onUpdate={updateAdminApiKey}
+                onDelete={deleteAdminApiKey}
               />
             </TabsContent>
             <TabsContent value="limits" className="mt-0">
@@ -2412,6 +2515,365 @@ function VouchersModule({
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function ApiKeysModule({
+  apiKeys,
+  disabled,
+  onCreate,
+  onUpdate,
+  onDelete,
+}: {
+  apiKeys: AdminApiKey[]
+  disabled: boolean
+  onCreate: (payload: {
+    name: string
+    key?: string
+    isActive: boolean
+    whitelistIps: string[]
+    blacklistIps: string[]
+  }) => Promise<void>
+  onUpdate: (
+    keyId: string,
+    payload: {
+      name: string
+      key: string
+      isActive: boolean
+      whitelistIps: string[]
+      blacklistIps: string[]
+    }
+  ) => Promise<void>
+  onDelete: (keyId: string) => Promise<void>
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="flex flex-col gap-3">
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Admin API Keys</CardTitle>
+          <CardDescription>
+            Unlimited admin keys stored in MongoDB. Leave whitelist and blacklist
+            empty to allow every IP by default.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            {apiKeys.length} key(s)
+          </p>
+          <Button type="button" disabled={disabled} onClick={() => setOpen(true)}>
+            <PlusIcon data-icon="inline-start" />
+            Create API Key
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create API Key</DialogTitle>
+            <DialogDescription>
+              Create an unlimited admin API key. Custom key is optional.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={async (event) => {
+              event.preventDefault()
+              const form = new FormData(event.currentTarget)
+              await onCreate({
+                name: String(form.get("name") ?? ""),
+                key: String(form.get("key") ?? "").trim() || undefined,
+                isActive: form.get("isActive") === "on",
+                whitelistIps: String(form.get("whitelistIps") ?? "")
+                  .split(/\r?\n/)
+                  .map((value) => value.trim().toLowerCase())
+                  .filter(Boolean),
+                blacklistIps: String(form.get("blacklistIps") ?? "")
+                  .split(/\r?\n/)
+                  .map((value) => value.trim().toLowerCase())
+                  .filter(Boolean),
+              })
+              setOpen(false)
+            }}
+          >
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="api-key-name">Name</FieldLabel>
+                <Input id="api-key-name" name="name" required placeholder="Primary admin key" />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="api-key-value">Key value</FieldLabel>
+                <Input
+                  id="api-key-value"
+                  name="key"
+                  placeholder="Leave empty to auto-generate"
+                />
+                <FieldDescription>
+                  Use this value in `x-admin-api-key` or `Authorization: Bearer ...`.
+                </FieldDescription>
+              </Field>
+              <Field orientation="horizontal">
+                <FieldLabel htmlFor="api-key-active">Active</FieldLabel>
+                <Switch id="api-key-active" name="isActive" defaultChecked />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="api-key-whitelist">Whitelist IPs</FieldLabel>
+                <textarea
+                  id="api-key-whitelist"
+                  name="whitelistIps"
+                  rows={5}
+                  placeholder={"1.2.3.4\n2001:db8::1"}
+                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                />
+                <FieldDescription>
+                  Empty means no whitelist restriction.
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="api-key-blacklist">Blacklist IPs</FieldLabel>
+                <textarea
+                  id="api-key-blacklist"
+                  name="blacklistIps"
+                  rows={5}
+                  placeholder={"5.6.7.8\n::1"}
+                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                />
+                <FieldDescription>
+                  Blacklist always blocks matching IPs.
+                </FieldDescription>
+              </Field>
+            </FieldGroup>
+            <DialogFooter className="mt-4">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={disabled}>
+                <PlusIcon data-icon="inline-start" />
+                Save Key
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">API Key Directory</CardTitle>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Key</TableHead>
+                <TableHead>IP Rules</TableHead>
+                <TableHead>Last Used</TableHead>
+                <TableHead>Uses</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-24" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {apiKeys.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                    No admin API keys yet
+                  </TableCell>
+                </TableRow>
+              ) : (
+                apiKeys.map((apiKey) => (
+                  <ApiKeyRow
+                    key={apiKey.id}
+                    apiKey={apiKey}
+                    disabled={disabled}
+                    onUpdate={onUpdate}
+                    onDelete={onDelete}
+                  />
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function ApiKeyRow({
+  apiKey,
+  disabled,
+  onUpdate,
+  onDelete,
+}: {
+  apiKey: AdminApiKey
+  disabled: boolean
+  onUpdate: (
+    keyId: string,
+    payload: {
+      name: string
+      key: string
+      isActive: boolean
+      whitelistIps: string[]
+      blacklistIps: string[]
+    }
+  ) => Promise<void>
+  onDelete: (keyId: string) => Promise<void>
+}) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState(apiKey.name)
+  const [value, setValue] = useState(apiKey.key)
+  const [isActive, setIsActive] = useState(apiKey.isActive)
+  const [whitelistIps, setWhitelistIps] = useState(apiKey.whitelistIps.join("\n"))
+  const [blacklistIps, setBlacklistIps] = useState(apiKey.blacklistIps.join("\n"))
+
+  useEffect(() => {
+    setName(apiKey.name)
+    setValue(apiKey.key)
+    setIsActive(apiKey.isActive)
+    setWhitelistIps(apiKey.whitelistIps.join("\n"))
+    setBlacklistIps(apiKey.blacklistIps.join("\n"))
+  }, [apiKey])
+
+  const hasWhitelist = apiKey.whitelistIps.length > 0
+  const hasBlacklist = apiKey.blacklistIps.length > 0
+
+  return (
+    <TableRow>
+      <TableCell className="font-medium">{apiKey.name}</TableCell>
+      <TableCell className="max-w-56 truncate">
+        <code className="text-xs">{apiKey.key}</code>
+      </TableCell>
+      <TableCell className="text-xs text-muted-foreground">
+        {!hasWhitelist && !hasBlacklist
+          ? "All IPs allowed"
+          : `${hasWhitelist ? `Whitelist ${apiKey.whitelistIps.length}` : "No whitelist"} / ${
+              hasBlacklist ? `Blacklist ${apiKey.blacklistIps.length}` : "No blacklist"
+            }`}
+      </TableCell>
+      <TableCell className="text-muted-foreground">
+        {formatAdminDateTime(apiKey.lastUsedAt)}
+        {apiKey.lastUsedIp ? ` · ${apiKey.lastUsedIp}` : ""}
+      </TableCell>
+      <TableCell>
+        <Badge variant="secondary">{apiKey.useCount}</Badge>
+      </TableCell>
+      <TableCell>
+        <Badge variant={apiKey.isActive ? "outline" : "secondary"}>
+          {apiKey.isActive ? "Active" : "Disabled"}
+        </Badge>
+      </TableCell>
+      <TableCell className="flex items-center justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          disabled={disabled}
+          onClick={() => setOpen(true)}
+        >
+          <PencilIcon />
+        </Button>
+        <Button
+          type="button"
+          variant="destructive"
+          size="icon-sm"
+          disabled={disabled}
+          onClick={() => void onDelete(apiKey.id)}
+        >
+          <TrashIcon />
+        </Button>
+
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit API Key</DialogTitle>
+              <DialogDescription>
+                Update key value and IP whitelist or blacklist rules.
+              </DialogDescription>
+            </DialogHeader>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor={`api-key-name-${apiKey.id}`}>Name</FieldLabel>
+                <Input
+                  id={`api-key-name-${apiKey.id}`}
+                  value={name}
+                  disabled={disabled}
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`api-key-value-${apiKey.id}`}>Key value</FieldLabel>
+                <Input
+                  id={`api-key-value-${apiKey.id}`}
+                  value={value}
+                  disabled={disabled}
+                  onChange={(event) => setValue(event.target.value)}
+                />
+              </Field>
+              <Field orientation="horizontal">
+                <FieldLabel htmlFor={`api-key-active-${apiKey.id}`}>Active</FieldLabel>
+                <Switch
+                  id={`api-key-active-${apiKey.id}`}
+                  checked={isActive}
+                  disabled={disabled}
+                  onCheckedChange={setIsActive}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`api-key-whitelist-${apiKey.id}`}>Whitelist IPs</FieldLabel>
+                <textarea
+                  id={`api-key-whitelist-${apiKey.id}`}
+                  rows={5}
+                  value={whitelistIps}
+                  disabled={disabled}
+                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  onChange={(event) => setWhitelistIps(event.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`api-key-blacklist-${apiKey.id}`}>Blacklist IPs</FieldLabel>
+                <textarea
+                  id={`api-key-blacklist-${apiKey.id}`}
+                  rows={5}
+                  value={blacklistIps}
+                  disabled={disabled}
+                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  onChange={(event) => setBlacklistIps(event.target.value)}
+                />
+              </Field>
+            </FieldGroup>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={disabled}
+                onClick={async () => {
+                  await onUpdate(apiKey.id, {
+                    name,
+                    key: value,
+                    isActive,
+                    whitelistIps: whitelistIps
+                      .split(/\r?\n/)
+                      .map((item) => item.trim().toLowerCase())
+                      .filter(Boolean),
+                    blacklistIps: blacklistIps
+                      .split(/\r?\n/)
+                      .map((item) => item.trim().toLowerCase())
+                      .filter(Boolean),
+                  })
+                  setOpen(false)
+                }}
+              >
+                <SaveIcon data-icon="inline-start" />
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </TableCell>
+    </TableRow>
   )
 }
 

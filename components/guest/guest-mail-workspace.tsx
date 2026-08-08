@@ -47,6 +47,10 @@ import {
 } from "@/components/ui/tooltip"
 import { isValidDomain, normalizeDomain } from "@/lib/domain-validation"
 import { resolveDomainSource } from "@/lib/domain-source"
+import {
+  GUEST_EMAIL_COOKIE,
+  GUEST_EMAIL_COOKIE_MAX_AGE,
+} from "@/lib/guest-email"
 import { cn } from "@/lib/utils"
 import {
   formatRelativeInboxTime,
@@ -201,6 +205,10 @@ function normalizeEmailAddress(value: string) {
     domainPart,
     localPart,
   }
+}
+
+function buildGuestAddressPath(address: string) {
+  return `/${address}`
 }
 
 async function fetchDomainStatus(domain: string) {
@@ -477,15 +485,12 @@ export default function GuestMailWorkspace({
 
     const cleanUrl = () => {
       if (typeof window === "undefined") return
-      if (initialEmail || window.location.search.includes("email=")) {
-        window.history.replaceState(null, "", "/")
-      }
+      window.history.replaceState(null, "", "/")
     }
 
     const parsed = normalizeEmailAddress(emailParam)
     if (!parsed) {
       appliedUrlEmailRef.current = emailParam
-      cleanUrl()
       toast.error("Invalid email URL")
       return
     }
@@ -604,6 +609,18 @@ export default function GuestMailWorkspace({
 
     return Math.max(5000, refreshSeconds * 1000)
   }, [appSettings?.inboxRefreshSeconds, isBackendWebSocketConnected])
+
+  useEffect(() => {
+    if (typeof document === "undefined") return
+    if (user) return
+
+    if (!activeAddress?.address) {
+      document.cookie = `${GUEST_EMAIL_COOKIE}=; path=/; max-age=0; SameSite=Lax`
+      return
+    }
+
+    document.cookie = `${GUEST_EMAIL_COOKIE}=${encodeURIComponent(activeAddress.address)}; path=/; max-age=${GUEST_EMAIL_COOKIE_MAX_AGE}; SameSite=Lax`
+  }, [activeAddress?.address, user])
 
   useEffect(() => {
     if (user) return
@@ -1132,7 +1149,7 @@ export default function GuestMailWorkspace({
 
   const [isWillcardLoading, setIsWillcardLoading] = useState(false)
   const activeAddressHref = activeAddress
-    ? `/${activeAddress.address}`
+    ? buildGuestAddressPath(activeAddress.address)
     : ""
   const activeAddressPublicUrl =
     activeAddress && siteOrigin ? `${siteOrigin}${activeAddressHref}` : ""
