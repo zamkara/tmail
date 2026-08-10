@@ -40,6 +40,13 @@ export const useAuthStore = create<AuthStore>()(
     {
       name: "tmail-auth",
       partialize: (state) => ({ user: state.user }),
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          console.error("Failed to hydrate auth store:", error)
+        }
+
+        state?.setLoaded()
+      },
     }
   )
 )
