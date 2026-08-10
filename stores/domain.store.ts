@@ -31,6 +31,17 @@ export const useDomainStore = create<DomainStore>()(
           domains: state.domains.filter((domain) => domain.id !== id),
         })),
     }),
-    { name: "tmail-domains" }
+    {
+      name: "tmail-domains",
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          console.error("Failed to hydrate domain store:", error)
+        }
+
+        if (state && !state.isLoaded) {
+          state.setDomains(state.domains)
+        }
+      },
+    }
   )
 )

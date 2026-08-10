@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-admin-api-keys-and-guest-email-context"
+BRANCH_NAME="fix/TMAIL-${TIMESTAMP}-guest-store-hydration-first-load"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,23 +28,19 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-feat: add admin api keys and guest email context flow
+fix: stabilize guest first-load store hydration
 
 Main changes:
-- add admin-managed API keys stored in MongoDB with create, edit, delete, active toggle, whitelist, blacklist, and usage metadata
-- allow admin API key authentication across protected admin routes by extending server-side admin session checks to accept request-based API key access
-- add guest email context persistence so direct email routes sync through cookies and the homepage keeps the selected guest address after refresh
-- filter nested subdomains out of public and admin domain lists while keeping exact domain status checks for manual subdomain validation
-- update backend console Docs action to open the external API docs site at `https://api.pusat.email/`
-- add the API docs link to the user API key settings panel for faster access to integration references
+- mark auth store hydration complete after persist rehydration so guest and user flows do not stall on fresh browsers
+- mark address store hydration complete after persist rehydration so guest inbox auto-generation can proceed on first load and incognito sessions
+- mark domain store hydration complete after persist rehydration by reapplying the current domain list into loaded state
+- prevent the guest landing page from getting stuck in `No address` state when local storage starts empty in production
 
 Testing:
 - [x] `pnpm typecheck`
-- [ ] Verify admin can create, edit, disable, and delete API keys from the Admin Session dialog
-- [ ] Verify admin API keys can access protected admin API routes with whitelist and blacklist rules applied
-- [ ] Verify guest email opened from `/{email}` persists after refresh and redirects back to `/` with the same inbox context
-- [ ] Verify public and admin domain lists exclude nested subdomains while manual subdomain status checks still validate exact domains
-- [ ] Verify backend console `Docs` and user API key settings docs link both open `https://api.pusat.email/`
+- [ ] Verify guest homepage in a new browser session auto-generates an address instead of showing `No address`
+- [ ] Verify incognito guest homepage behaves the same after a hard refresh
+- [ ] Verify existing logged-in and guest sessions still restore saved auth/address/domain state correctly
 EOF
 )
 

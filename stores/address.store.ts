@@ -94,6 +94,15 @@ export const useAddressStore = create<AddressStore>()(
           ),
         })),
     }),
-    { name: "tmail-addresses-v2" }
+    {
+      name: "tmail-addresses-v2",
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          console.error("Failed to hydrate address store:", error)
+        }
+
+        state?.setLoaded()
+      },
+    }
   )
 )
