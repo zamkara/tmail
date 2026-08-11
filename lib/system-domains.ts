@@ -1,6 +1,7 @@
 import { Domain } from "@/models/domain.model"
+import { buildBackendUrl } from "@/services/backend.service"
 
-const DOMAIN_FETCH_TIMEOUT_MS = 8000
+const DOMAIN_FETCH_TIMEOUT_MS = 4000
 
 interface EmailApiDomainResponse {
   domains?: Array<{ domain?: string }>
@@ -11,14 +12,14 @@ function normalizeDomain(value: unknown) {
 }
 
 export async function fetchEmailApiSystemDomains() {
-  const emailApi = process.env.EMAIL_API_URL
-  if (!emailApi) return []
+  const target = buildBackendUrl("/random-domain")
+  if (!target) return []
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), DOMAIN_FETCH_TIMEOUT_MS)
 
   try {
-    const res = await fetch(`${emailApi}/random-domain`, {
+    const res = await fetch(target, {
       cache: "no-store",
       signal: controller.signal,
     })

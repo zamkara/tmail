@@ -52,10 +52,7 @@ import {
   GUEST_EMAIL_COOKIE_MAX_AGE,
 } from "@/lib/guest-email"
 import { cn } from "@/lib/utils"
-import {
-  formatRelativeInboxTime,
-  parseInboxSender,
-} from "@/lib/inbox"
+import { formatRelativeInboxTime, parseInboxSender } from "@/lib/inbox"
 import { generateAddress } from "@/services/address.service"
 import type { BackendDomainStatus } from "@/services/backend.service"
 import { getDomains } from "@/services/domain.service"
@@ -65,16 +62,13 @@ import { useAuroraStore } from "@/stores/aurora.store"
 import { useDomainStore } from "@/stores/domain.store"
 import { useInboxStore } from "@/stores/inbox.store"
 import { useCopy } from "@/hooks/use-copy"
-import type {
-  Domain,
-  EmailDetail,
-  EmailItem,
-  GeneratedAddress,
-} from "@/types"
+import type { Domain, EmailDetail, EmailItem, GeneratedAddress } from "@/types"
 
 const DEFAULT_INBOX_REFRESH_MS = 5000
 const WEBSOCKET_CONNECTED_REFRESH_MS = 60000
 const INBOX_FETCH_TIMEOUT_MS = 8000
+const DOMAIN_LOAD_RETRY_ATTEMPTS = 2
+const DOMAIN_LOAD_RETRY_DELAY_MS = 500
 const DEFAULT_AURORA_COLOR_STOPS: [string, string, string] = [
   "#dc67ff",
   "#420e73",
@@ -106,6 +100,10 @@ interface PublicAppSettings {
 
 function isAddressAvailable(address: GeneratedAddress) {
   return new Date(address.expiresAt).getTime() > Date.now()
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function getMessageTime(message: BeInboxItem) {
@@ -230,15 +228,17 @@ function findMatchingDomain(domainPart: string, domains: Domain[]) {
   const normalizedPart = normalizeDomain(domainPart)
   if (!normalizedPart) return null
 
-  return [...domains]
-    .sort((first, second) => second.name.length - first.name.length)
-    .find((domain) => {
-      const normalizedName = normalizeDomain(domain.name)
-      return (
-        normalizedPart === normalizedName ||
-        normalizedPart.endsWith(`.${normalizedName}`)
-      )
-    }) ?? null
+  return (
+    [...domains]
+      .sort((first, second) => second.name.length - first.name.length)
+      .find((domain) => {
+        const normalizedName = normalizeDomain(domain.name)
+        return (
+          normalizedPart === normalizedName ||
+          normalizedPart.endsWith(`.${normalizedName}`)
+        )
+      }) ?? null
+  )
 }
 
 function findExactDomain(domainPart: string, domains: Domain[]) {
@@ -368,7 +368,6 @@ export default function GuestMailWorkspace({
   const resetInbox = useInboxStore((state) => state.resetInbox)
   const domains = useDomainStore((state) => state.domains)
   const setDomains = useDomainStore((state) => state.setDomains)
-  const addAddress = useAddressStore((state) => state.addAddress)
   const addAddressAndSetActive = useAddressStore(
     (state) => state.addAddressAndSetActive
   )
@@ -388,10 +387,13 @@ export default function GuestMailWorkspace({
   const [isDeletingMessages, setIsDeletingMessages] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [isLoadingDomains, setIsLoadingDomains] = useState(false)
+  const [domainLoadError, setDomainLoadError] = useState<string | null>(null)
+  const [domainLoadRequest, setDomainLoadRequest] = useState(0)
   const [appSettings, setAppSettings] = useState<PublicAppSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [domainStatus, setDomainStatus] =
-    useState<BackendDomainStatus | null>(null)
+  const [domainStatus, setDomainStatus] = useState<BackendDomainStatus | null>(
+    null
+  )
   const [domainStatusError, setDomainStatusError] = useState<string | null>(
     null
   )
@@ -400,7 +402,6 @@ export default function GuestMailWorkspace({
     useState(false)
   const prevEmailCountRef = useRef(0)
   const autoAddressPromiseRef = useRef<Promise<GeneratedAddress> | null>(null)
-  const domainLoadStartedRef = useRef(false)
   const appliedUrlEmailRef = useRef<string | null>(null)
   const generateAddressLockRef = useRef(false)
   const domainStatusRequestRef = useRef(0)
@@ -439,30 +440,60 @@ export default function GuestMailWorkspace({
   }, [])
 
   useEffect(() => {
-    if (domainLoadStartedRef.current) return
-
     let cancelled = false
-    domainLoadStartedRef.current = true
 
     async function loadDomains() {
       setIsLoadingDomains(true)
+      setDomainLoadError(null)
+      let lastError: unknown = null
 
       try {
-        const nextDomains = getPublicDomains(await getDomains())
-        if (!cancelled) {
-          setDomains(nextDomains)
+        for (
+          let attempt = 1;
+          attempt <= DOMAIN_LOAD_RETRY_ATTEMPTS;
+          attempt += 1
+        ) {
+          try {
+            const nextDomains = getPublicDomains(await getDomains())
+            if (cancelled) return
+
+            if (
+              nextDomains.length > 0 ||
+              attempt === DOMAIN_LOAD_RETRY_ATTEMPTS
+            ) {
+              setDomains(nextDomains)
+
+              if (nextDomains.length === 0) {
+                const message = "No public domains are available yet"
+                setDomainLoadError(message)
+                toast.error(message)
+              }
+              return
+            }
+          } catch (error) {
+            lastError = error
+
+            if (attempt === DOMAIN_LOAD_RETRY_ATTEMPTS) {
+              throw error
+            }
+          }
+
+          await wait(DOMAIN_LOAD_RETRY_DELAY_MS * attempt)
         }
       } catch (error) {
         console.error("Failed to load domains:", error)
         if (!cancelled) {
+          const message =
+            lastError instanceof Error
+              ? lastError.message
+              : "Failed to load domains"
+
           setDomains([])
-          toast.error(
-            error instanceof Error ? error.message : "Failed to load domains"
-          )
+          setDomainLoadError(message)
+          toast.error(message)
         }
       } finally {
         if (!cancelled) setIsLoadingDomains(false)
-        if (cancelled) domainLoadStartedRef.current = false
       }
     }
 
@@ -471,7 +502,7 @@ export default function GuestMailWorkspace({
     return () => {
       cancelled = true
     }
-  }, [setDomains])
+  }, [domainLoadRequest, setDomains])
 
   const publicDomains = useMemo(() => getPublicDomains(domains), [domains])
   const requestedEmail = initialEmail ?? searchParams.get("email")
@@ -563,7 +594,6 @@ export default function GuestMailWorkspace({
     appliedUrlEmailRef.current = emailParam
     cleanUrl()
   }, [
-    addAddress,
     addAddressAndSetActive,
     addressLoaded,
     addresses,
@@ -588,14 +618,16 @@ export default function GuestMailWorkspace({
   const activeAddressDomain = activeAddressEmail
     ? getAddressDomain(activeAddressEmail)
     : ""
-  const activeExactPublicDomain = activeAddressDomain
-    ? findExactDomain(activeAddressDomain, publicDomains)
+  const activeMatchingPublicDomain = activeAddressDomain
+    ? findMatchingDomain(activeAddressDomain, publicDomains)
     : null
   const activeDomainUnavailable = Boolean(
+    activeAddressDomain &&
     !isLoadingDomains &&
-      activeAddressDomain &&
-      !isLoadingDomainStatus &&
-      (domainStatusError || !isDomainStatusAvailable(domainStatus))
+    !isLoadingDomainStatus &&
+    (domainStatus
+      ? !isDomainStatusAvailable(domainStatus)
+      : domainStatusError && !activeMatchingPublicDomain)
   )
   const domainAccessMessage = getGuestDomainAccessMessage(
     domainStatus,
@@ -688,7 +720,10 @@ export default function GuestMailWorkspace({
   useEffect(() => {
     if (!authLoaded) return
     if (!addressLoaded) return
-    if (hasRequestedEmail && appliedUrlEmailRef.current !== requestedEmail) return
+    if (!appSettings) return
+    if (isLoadingDomains) return
+    if (hasRequestedEmail && appliedUrlEmailRef.current !== requestedEmail)
+      return
     if (!user && appSettings?.allowGuestAddresses === false) return
     if (activeAddress) return
 
@@ -696,7 +731,9 @@ export default function GuestMailWorkspace({
       if (!isAddressAvailable(address)) return false
       if (user) return true
 
-      return Boolean(findExactDomain(getAddressDomain(address.address), publicDomains))
+      return Boolean(
+        findExactDomain(getAddressDomain(address.address), publicDomains)
+      )
     })
     if (reusableAddress) {
       setActiveAddress(reusableAddress.id)
@@ -717,21 +754,24 @@ export default function GuestMailWorkspace({
     if (!firstAvailableDomain || autoAddressPromiseRef.current) return
 
     autoAddressPromiseRef.current = user
-      ? generateAddress(firstAvailableDomain.id, firstAvailableDomain.name, true)
-      : Promise.resolve(
-          createGuestAddress(firstAvailableDomain, false)
+      ? generateAddress(
+          firstAvailableDomain.id,
+          firstAvailableDomain.name,
+          true
         )
+      : Promise.resolve(createGuestAddress(firstAvailableDomain, false))
 
     void autoAddressPromiseRef.current
       .then((address) => {
         resetInbox()
-        addAddress(address)
-        setActiveAddress(address.id)
+        addAddressAndSetActive(address)
       })
       .catch((error) => {
         console.error("Failed to create initial email address:", error)
         toast.error(
-          error instanceof Error ? error.message : "Failed to create email address"
+          error instanceof Error
+            ? error.message
+            : "Failed to create email address"
         )
       })
       .finally(() => {
@@ -739,12 +779,13 @@ export default function GuestMailWorkspace({
       })
   }, [
     activeAddress,
-    addAddress,
+    addAddressAndSetActive,
     addressLoaded,
     addresses,
     authLoaded,
     hasRequestedEmail,
     appSettings,
+    isLoadingDomains,
     publicDomains,
     requestedEmail,
     resetInbox,
@@ -752,88 +793,91 @@ export default function GuestMailWorkspace({
     user,
   ])
 
-  const loadEmails = useCallback(async (silent = false) => {
-    if (generateAddressLockRef.current) return
+  const loadEmails = useCallback(
+    async (silent = false) => {
+      if (generateAddressLockRef.current) return
 
-    if (!activeAddress) {
-      setEmails([])
-      setExpandedEmailId(null)
-      setEmailDetails({})
-      setError(null)
-      return
-    }
-    if (activeDomainUnavailable) {
-      setEmails([])
-      setExpandedEmailId(null)
-      setEmailDetails({})
-      setError(domainAccessMessage)
-      return
-    }
-
-    if (!silent) {
-      setIsLoading(true)
-      setError(null)
-    }
-
-    try {
-      const data = await fetchJsonWithTimeout<unknown>(
-        `/api/inbox?address=${encodeURIComponent(activeAddress.address)}`
-      )
-      const nextEmails = await Promise.all(
-        extractMessages(data).map(async (message) => {
-          const email = mapEmailItem(
-            message,
-            activeAddress,
-            readIds.has(message.id)
-          )
-          const cachedOtp = otpCacheRef.current.get(email.id)
-
-          if (email.otp) {
-            otpCacheRef.current.set(email.id, email.otp)
-            return email
-          }
-
-          if (cachedOtp !== undefined) {
-            return { ...email, otp: cachedOtp }
-          }
-
-          if (!message.is_otp) return email
-
-          try {
-            const detailData = await fetchJsonWithTimeout<BeInboxItem>(
-              `/api/inbox/${email.id}`
-            )
-            const otp = detailData.otp ?? null
-            otpCacheRef.current.set(email.id, otp)
-            return { ...email, otp }
-          } catch {
-            otpCacheRef.current.set(email.id, null)
-            return email
-          }
-        })
-      )
-
-      if (nextEmails.length > prevEmailCountRef.current) {
-        triggerAurora(
-          nextEmails.some((email) => email.otp)
-            ? OTP_AURORA_COLOR_STOPS
-            : DEFAULT_AURORA_COLOR_STOPS
-        )
-      }
-      prevEmailCountRef.current = nextEmails.length
-
-      setEmails(nextEmails)
-    } catch {
-      if (!silent) {
+      if (!activeAddress) {
         setEmails([])
-        setError("Failed to load inbox.")
+        setExpandedEmailId(null)
+        setEmailDetails({})
+        setError(null)
+        return
       }
-    } finally {
+      if (activeDomainUnavailable) {
+        setEmails([])
+        setExpandedEmailId(null)
+        setEmailDetails({})
+        setError(domainAccessMessage)
+        return
+      }
+
       if (!silent) {
-        setIsLoading(false)
+        setIsLoading(true)
+        setError(null)
       }
-    }
-  }, [activeAddress, activeDomainUnavailable, domainAccessMessage, readIds])
+
+      try {
+        const data = await fetchJsonWithTimeout<unknown>(
+          `/api/inbox?address=${encodeURIComponent(activeAddress.address)}`
+        )
+        const nextEmails = await Promise.all(
+          extractMessages(data).map(async (message) => {
+            const email = mapEmailItem(
+              message,
+              activeAddress,
+              readIds.has(message.id)
+            )
+            const cachedOtp = otpCacheRef.current.get(email.id)
+
+            if (email.otp) {
+              otpCacheRef.current.set(email.id, email.otp)
+              return email
+            }
+
+            if (cachedOtp !== undefined) {
+              return { ...email, otp: cachedOtp }
+            }
+
+            if (!message.is_otp) return email
+
+            try {
+              const detailData = await fetchJsonWithTimeout<BeInboxItem>(
+                `/api/inbox/${email.id}`
+              )
+              const otp = detailData.otp ?? null
+              otpCacheRef.current.set(email.id, otp)
+              return { ...email, otp }
+            } catch {
+              otpCacheRef.current.set(email.id, null)
+              return email
+            }
+          })
+        )
+
+        if (nextEmails.length > prevEmailCountRef.current) {
+          triggerAurora(
+            nextEmails.some((email) => email.otp)
+              ? OTP_AURORA_COLOR_STOPS
+              : DEFAULT_AURORA_COLOR_STOPS
+          )
+        }
+        prevEmailCountRef.current = nextEmails.length
+
+        setEmails(nextEmails)
+      } catch {
+        if (!silent) {
+          setEmails([])
+          setError("Failed to load inbox.")
+        }
+      } finally {
+        if (!silent) {
+          setIsLoading(false)
+        }
+      }
+    },
+    [activeAddress, activeDomainUnavailable, domainAccessMessage, readIds]
+  )
 
   async function handleDeleteAllMessages() {
     if (!activeAddress || isDeletingMessages) return
@@ -885,7 +929,10 @@ export default function GuestMailWorkspace({
         email?: string | null
         message?: BeInboxItem | null
       }>
-      if (customEvent.detail.email && customEvent.detail.email !== activeAddressEmail) {
+      if (
+        customEvent.detail.email &&
+        customEvent.detail.email !== activeAddressEmail
+      ) {
         return
       }
 
@@ -919,7 +966,10 @@ export default function GuestMailWorkspace({
         email?: string | null
         connected?: boolean
       }>
-      if (customEvent.detail.email && customEvent.detail.email !== activeAddressEmail) {
+      if (
+        customEvent.detail.email &&
+        customEvent.detail.email !== activeAddressEmail
+      ) {
         return
       }
       setIsBackendWebSocketConnected(Boolean(customEvent.detail.connected))
@@ -931,7 +981,10 @@ export default function GuestMailWorkspace({
       handleBackendWebSocketStatus
     )
     return () => {
-      window.removeEventListener("tmail:backend-inbox-update", handleBackendUpdate)
+      window.removeEventListener(
+        "tmail:backend-inbox-update",
+        handleBackendUpdate
+      )
       window.removeEventListener(
         "tmail:backend-ws-status",
         handleBackendWebSocketStatus
@@ -1176,7 +1229,7 @@ export default function GuestMailWorkspace({
                 alt="Premiumisme Email"
                 width={620}
                 height={140}
-                className="mx-auto h-[96px] w-full max-w-[400px] object-contain dark:hidden sm:h-[140px] sm:max-w-[620px]"
+                className="mx-auto h-[96px] w-full max-w-[400px] object-contain sm:h-[140px] sm:max-w-[620px] dark:hidden"
                 priority
               />
               <Image
@@ -1184,7 +1237,7 @@ export default function GuestMailWorkspace({
                 alt="Premiumisme Email"
                 width={620}
                 height={140}
-                className="mx-auto hidden h-[96px] w-full max-w-[400px] object-contain dark:block sm:h-[140px] sm:max-w-[620px]"
+                className="mx-auto hidden h-[96px] w-full max-w-[400px] object-contain sm:h-[140px] sm:max-w-[620px] dark:block"
                 priority
               />
               <p className="text-sm text-muted-foreground sm:text-base">
@@ -1272,9 +1325,37 @@ export default function GuestMailWorkspace({
             )}
           </>
         ) : (
-          <p className="py-2 text-center text-sm text-muted-foreground">
-            Select or generate an email address to start receiving messages.
-          </p>
+          <div className="flex flex-col items-center gap-3 py-2 text-center">
+            <p className="text-sm text-muted-foreground">
+              Select or generate an email address to start receiving messages.
+            </p>
+            {isLoadingDomains ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Spinner className="size-4" />
+                <span>Loading domains...</span>
+              </div>
+            ) : domainLoadError ? (
+              <div className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
+                <span>{domainLoadError}</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setDomainLoadRequest((request) => request + 1)}
+                >
+                  <RefreshCwIcon className="size-4" />
+                  Retry
+                </Button>
+              </div>
+            ) : appSettings?.allowGuestAddresses === false ? (
+              <p className="text-sm text-muted-foreground">
+                Guest email addresses are currently disabled.
+              </p>
+            ) : (
+              <DomainAddressSwitcher />
+            )}
+          </div>
         )}
       </div>
       <Card className="bg-linear-to-b from-card/80 via-card/80 to-card/80 drop-shadow-sm backdrop-blur-lg">
@@ -1376,9 +1457,7 @@ export default function GuestMailWorkspace({
                     onClick={() => void handleDeleteAllMessages()}
                     className="bg-[#fb2c36] text-white hover:bg-[#fb2c36]/90"
                   >
-                    {isDeletingMessages ? (
-                      <Spinner className="size-4" />
-                    ) : null}
+                    {isDeletingMessages ? <Spinner className="size-4" /> : null}
                     Delete messages
                   </Button>
                 </DialogFooter>
@@ -1554,9 +1633,7 @@ function PrivateDomainNotice({
 
   return (
     <div className="space-y-1 text-center text-sm">
-      <div className="font-medium text-[#fb2c36]">
-        Email not supported
-      </div>
+      <div className="font-medium text-[#fb2c36]">Email not supported</div>
       <div className="text-[#fb2c36]">
         {isPrivate ? "Private domain" : "Domain unavailable"}
       </div>
@@ -1618,10 +1695,7 @@ function EmailItemButton({
         <span className="text-xs text-muted-foreground">
           {formatRelativeInboxTime(email.receivedAt)}
         </span>
-        <EmailOtpChip
-          otp={email.otp}
-          className="max-w-full"
-        />
+        <EmailOtpChip otp={email.otp} className="max-w-full" />
       </span>
     </div>
   )

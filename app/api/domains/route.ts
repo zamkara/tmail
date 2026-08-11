@@ -13,8 +13,10 @@ import {
   normalizeDnsHost,
   normalizeDomain,
 } from "@/lib/domain-validation"
-import { syncSystemDomainsFromEmailApi } from "@/lib/system-domains"
-import { mockDomains } from "@/mock/domains"
+import {
+  fetchEmailApiSystemDomains,
+  syncSystemDomainsFromEmailApi,
+} from "@/lib/system-domains"
 import { Domain as DomainModel } from "@/models/domain.model"
 
 function isNestedSubdomain(domainName: string, allNames: string[]) {
@@ -22,6 +24,25 @@ function isNestedSubdomain(domainName: string, allNames: string[]) {
     (candidate) =>
       candidate !== domainName && domainName.endsWith(`.${candidate}`)
   )
+}
+
+function serializeBackendSystemDomains(domainNames: string[]) {
+  const addedAt = new Date().toISOString()
+
+  return domainNames
+    .filter((domainName) => !isNestedSubdomain(domainName, domainNames))
+    .map((domainName) => ({
+      id: `system_${domainName}`,
+      name: domainName,
+      type: "system",
+      source: "system",
+      addedAt,
+      isVerified: true,
+      visibility: "public",
+      privateUntil: null,
+      isBanned: false,
+      isOwnedByUser: false,
+    }))
 }
 
 // GET /api/domains — semua domain dibaca dari MongoDB.
@@ -32,36 +53,43 @@ export async function GET() {
     const isAdminSession = await isAdminRequest()
 
     if (!hasMongoConfig()) {
-      const visibleMockDomains = mockDomains.filter((domain) =>
-        canSeeDomain(domain, auth?.userId ?? null, new Date(), {
-          isAdminSession,
-        })
-      )
-      const visibleMockDomainNames = visibleMockDomains.map(
-        (domain) => domain.name
-      )
+      let backendDomains: string[]
 
-      return NextResponse.json(
-        visibleMockDomains
-          .filter(
-            (domain) => !isNestedSubdomain(domain.name, visibleMockDomainNames)
-          )
-          .map((domain) => ({
-            ...domain,
-            visibility: domain.visibility ?? "public",
-            privateUntil: domain.privateUntil ?? null,
-            isBanned: domain.isBanned ?? false,
-            isOwnedByUser: Boolean(domain.isOwnedByUser),
-            source: resolveDomainSource(domain),
-          }))
-      )
+      try {
+        backendDomains = await fetchEmailApiSystemDomains()
+      } catch (error) {
+        console.warn("[domains:get] Email API domains unavailable", error)
+
+        return NextResponse.json(
+          {
+            error: "Domain backend tidak merespons.",
+          },
+          { status: 503 }
+        )
+      }
+
+      if (backendDomains.length === 0) {
+        return NextResponse.json(
+          {
+            error:
+              "Domain backend tidak tersedia. Konfigurasi EMAIL_API_URL atau NEXT_PUBLIC_EMAIL_API_URL.",
+          },
+          { status: 503 }
+        )
+      }
+
+      return NextResponse.json(serializeBackendSystemDomains(backendDomains))
     }
 
     await connectDB()
 
     const systemCount = await DomainModel.countDocuments({ type: "system" })
     if (systemCount === 0) {
-      await syncSystemDomainsFromEmailApi()
+      try {
+        await syncSystemDomainsFromEmailApi()
+      } catch (error) {
+        console.warn("[domains:get] failed to sync system domains", error)
+      }
     }
 
     const domains = await DomainModel.find({}).sort({ type: 1, name: 1 }).lean()
@@ -101,9 +129,7 @@ export async function GET() {
 
     return NextResponse.json(
       visibleDomains
-        .filter(
-          (domain) => !isNestedSubdomain(domain.name, visibleDomainNames)
-        )
+        .filter((domain) => !isNestedSubdomain(domain.name, visibleDomainNames))
         .map((domain) => ({
           id: domain._id.toString(),
           name: domain.name,

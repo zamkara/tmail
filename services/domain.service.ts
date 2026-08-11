@@ -1,13 +1,35 @@
 import type { Domain } from "@/types"
 import type { AuthUser } from "@/services/auth.service"
 
+const DOMAIN_REQUEST_TIMEOUT_MS = 8000
+
 async function readError(res: Response) {
   const data = (await res.json().catch(() => null)) as { error?: string } | null
   return data?.error ?? "Failed to load domains"
 }
 
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {}
+) {
+  const controller = new AbortController()
+  const timeout = setTimeout(
+    () => controller.abort(),
+    DOMAIN_REQUEST_TIMEOUT_MS
+  )
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 export async function getDomains(): Promise<Domain[]> {
-  const res = await fetch("/api/domains", {
+  const res = await fetchWithTimeout("/api/domains", {
     cache: "no-store",
   })
 
@@ -64,9 +86,7 @@ export async function setDomainVisibility(
   return data
 }
 
-export async function redeemDomainVoucher(
-  code: string
-): Promise<{
+export async function redeemDomainVoucher(code: string): Promise<{
   user: AuthUser
 }> {
   const res = await fetch("/api/vouchers/redeem", {
