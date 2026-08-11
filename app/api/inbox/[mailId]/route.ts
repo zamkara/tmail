@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server"
 
 import { isBlockedInboxMessage } from "@/lib/platform-ban"
-import { buildBackendUrl } from "@/services/backend.service"
+import { buildBackendUrl, getBackendBaseUrl } from "@/services/backend.service"
 
-const BASE = process.env.EMAIL_API_URL?.trim() ?? ""
+const BASE = getBackendBaseUrl()
 export const dynamic = "force-dynamic"
 
 export async function GET(

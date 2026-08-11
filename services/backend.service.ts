@@ -1,10 +1,14 @@
-import type {
-  Domain,
-  DomainSource,
-} from "@/types"
+import type { Domain, DomainSource } from "@/types"
 
-const BACKEND_API_BASE = process.env.EMAIL_API_URL?.trim() ?? ""
-const BACKEND_WS_BASE = process.env.EMAIL_WS_URL?.trim() ?? ""
+function readEnv(name: string) {
+  return process.env[name]?.trim() ?? ""
+}
+
+const BACKEND_API_BASE =
+  readEnv("EMAIL_API_URL") ||
+  readEnv("NEXT_PUBLIC_EMAIL_API_URL") ||
+  readEnv("NEXT_PUBLIC_API_URL")
+const BACKEND_WS_BASE = readEnv("EMAIL_WS_URL")
 
 export interface BackendHealth {
   ok: boolean

@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="fix/TMAIL-${TIMESTAMP}-guest-store-hydration-first-load"
+BRANCH_NAME="fix/TMAIL-${TIMESTAMP}-guest-domain-loading-production"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -25,22 +25,24 @@ else
   git checkout -b "$BRANCH_NAME"
 fi
 
-git add -A
+git add -A -- ':!/.pnpm-store' ':!/.pnpm-store/**'
 
 COMMIT_MSG=$(cat <<'EOF'
-fix: stabilize guest first-load store hydration
+fix: stabilize guest domain loading in production
 
 Main changes:
-- mark auth store hydration complete after persist rehydration so guest and user flows do not stall on fresh browsers
-- mark address store hydration complete after persist rehydration so guest inbox auto-generation can proceed on first load and incognito sessions
-- mark domain store hydration complete after persist rehydration by reapplying the current domain list into loaded state
-- prevent the guest landing page from getting stuck in `No address` state when local storage starts empty in production
+- load guest domains from the existing Mongo/backend email API logic instead of dummy mock domains
+- support production backend env compatibility via `EMAIL_API_URL`, `NEXT_PUBLIC_EMAIL_API_URL`, or `NEXT_PUBLIC_API_URL`
+- prevent guest first-load domain loading from getting stuck under React Strict Mode cleanup/retry behavior
+- add domain request timeout, explicit domain load error state, and retry action instead of leaving the UI on `Loading domains...`
+- keep inbox API routes on the same backend URL resolver as domain loading
 
 Testing:
-- [x] `pnpm typecheck`
-- [ ] Verify guest homepage in a new browser session auto-generates an address instead of showing `No address`
-- [ ] Verify incognito guest homepage behaves the same after a hard refresh
-- [ ] Verify existing logged-in and guest sessions still restore saved auth/address/domain state correctly
+- [x] `./node_modules/.bin/tsc --noEmit`
+- [x] `./node_modules/.bin/next build`
+- [x] Production runtime `/api/domains` returns real domains quickly and does not return `tmail.io`, `tmpbox.net`, or `throwmail.dev`
+- [x] Production runtime `/api/app-settings` and `/` return 200
+- [ ] Verify guest homepage in a fresh browser session auto-generates an address without manual refresh
 EOF
 )
 
