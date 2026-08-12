@@ -2,9 +2,13 @@ import bcrypt from "bcryptjs"
 import { NextResponse } from "next/server"
 
 import { connectDB } from "@/lib/db"
-import { getAllowedRegisterEmailDomains, isAllowedRegisterEmailDomain } from "@/lib/auth-email-domain"
+import {
+  getAllowedRegisterEmailDomains,
+  isAllowedRegisterEmailDomain,
+} from "@/lib/auth-email-domain"
 import { recordUserLogin } from "@/lib/login-audit"
 import { signToken } from "@/lib/jwt"
+import { isSecureRequest } from "@/lib/request-origin"
 import { verifyTurnstileToken } from "@/lib/turnstile"
 import { AUTH_COOKIE, serializeAuthUser } from "@/lib/auth"
 import {
@@ -76,7 +80,7 @@ export async function POST(req: Request) {
       email: user.email,
     })
 
-    const isSecure = new URL(req.url).protocol === "https:"
+    const isSecure = isSecureRequest(req)
 
     const res = NextResponse.json({ user: serializeAuthUser(freshUser) })
 
@@ -93,7 +97,10 @@ export async function POST(req: Request) {
     if (isRateLimitError(err)) {
       return NextResponse.json({ error: err.message }, { status: 429 })
     }
-    if (err instanceof Error && err.message.toLowerCase().includes("anti-bot")) {
+    if (
+      err instanceof Error &&
+      err.message.toLowerCase().includes("anti-bot")
+    ) {
       return NextResponse.json({ error: err.message }, { status: 400 })
     }
 

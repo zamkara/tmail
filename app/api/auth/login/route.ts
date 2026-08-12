@@ -5,6 +5,7 @@ import { AUTH_COOKIE, serializeAuthUser } from "@/lib/auth"
 import { connectDB } from "@/lib/db"
 import { recordUserLogin } from "@/lib/login-audit"
 import { signToken } from "@/lib/jwt"
+import { isSecureRequest } from "@/lib/request-origin"
 import { verifyTurnstileToken } from "@/lib/turnstile"
 import {
   assertRateLimit,
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
     })
 
     const { email, password, turnstileToken } = await req.json()
-    const isSecure = new URL(req.url).protocol === "https:"
+    const isSecure = isSecureRequest(req)
 
     if (!email || !password) {
       return NextResponse.json(
@@ -87,7 +88,10 @@ export async function POST(req: Request) {
     if (isRateLimitError(error)) {
       return NextResponse.json({ error: error.message }, { status: 429 })
     }
-    if (error instanceof Error && error.message.toLowerCase().includes("anti-bot")) {
+    if (
+      error instanceof Error &&
+      error.message.toLowerCase().includes("anti-bot")
+    ) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 

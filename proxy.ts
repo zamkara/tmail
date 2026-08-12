@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { verifyToken } from "@/lib/jwt"
+import { getRequestPublicUrl } from "@/lib/request-origin"
 
 // Halaman yang hanya bisa diakses kalau SUDAH login
 const AUTH_ONLY_PATHS = ["/account", "/inbox"]
@@ -24,11 +25,11 @@ export async function proxy(req: NextRequest) {
   }
 
   if (isAuthOnly && !isAuthenticated) {
-    return NextResponse.redirect(new URL("/signin", req.url))
+    return NextResponse.redirect(getRequestPublicUrl(req, "/signin"))
   }
 
   if (isGuestOnly && isAuthenticated) {
-    return NextResponse.redirect(new URL("/inbox", req.url))
+    return NextResponse.redirect(getRequestPublicUrl(req, "/inbox"))
   }
 
   return NextResponse.next()
