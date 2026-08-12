@@ -8,22 +8,12 @@ import {
   signAdminSession,
   verifyAdminSession,
 } from "@/lib/admin-session"
+import { isSecureRequest } from "@/lib/request-origin"
 
 export const dynamic = "force-dynamic"
 
 function hash(value: string) {
   return createHash("sha256").update(value).digest()
-}
-
-function isSecureRequest(req: Request) {
-  const forwardedProto = req.headers.get("x-forwarded-proto")
-  if (forwardedProto) {
-    return forwardedProto
-      .split(",")
-      .some((value) => value.trim().toLowerCase() === "https")
-  }
-
-  return new URL(req.url).protocol === "https:"
 }
 
 function isValidPassword(value: unknown) {

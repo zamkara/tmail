@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="fix/TMAIL-${TIMESTAMP}-guest-domain-loading-production"
+BRANCH_NAME="fix/TMAIL-${TIMESTAMP}-production-public-origin-redirect"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,21 +28,21 @@ fi
 git add -A -- ':!/.pnpm-store' ':!/.pnpm-store/**'
 
 COMMIT_MSG=$(cat <<'EOF'
-fix: stabilize guest domain loading in production
+fix: use public origin for production redirects
 
 Main changes:
-- load guest domains from the existing Mongo/backend email API logic instead of dummy mock domains
-- support production backend env compatibility via `EMAIL_API_URL`, `NEXT_PUBLIC_EMAIL_API_URL`, or `NEXT_PUBLIC_API_URL`
-- prevent guest first-load domain loading from getting stuck under React Strict Mode cleanup/retry behavior
-- add domain request timeout, explicit domain load error state, and retry action instead of leaving the UI on `Loading domains...`
-- keep inbox API routes on the same backend URL resolver as domain loading
+- add shared public-origin resolver using forwarded headers and production URL env fallbacks
+- update auth middleware redirects so `/inbox`, `/signin`, and guest-only redirects no longer point to internal `localhost:8901`
+- update guest email context redirect to return to the production public domain instead of the internal container host
+- use the same secure-request detection for login, register, and admin session cookies behind reverse proxies
+- document the supported backend domain env message with `NEXT_PUBLIC_API_URL`
 
 Testing:
 - [x] `./node_modules/.bin/tsc --noEmit`
 - [x] `./node_modules/.bin/next build`
-- [x] Production runtime `/api/domains` returns real domains quickly and does not return `tmail.io`, `tmpbox.net`, or `throwmail.dev`
-- [x] Production runtime `/api/app-settings` and `/` return 200
-- [ ] Verify guest homepage in a fresh browser session auto-generates an address without manual refresh
+- [x] Production runtime `/api/guest-email-context` redirects to `https://app.thvuinin.my.id/` with internal `Host: localhost:8901`
+- [x] Production runtime `/inbox` redirects to `https://app.thvuinin.my.id/signin` with forwarded production headers
+- [ ] Verify redirect on the live production reverse proxy after redeploy
 EOF
 )
 

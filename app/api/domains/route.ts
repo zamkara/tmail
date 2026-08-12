@@ -72,7 +72,7 @@ export async function GET() {
         return NextResponse.json(
           {
             error:
-              "Domain backend tidak tersedia. Konfigurasi EMAIL_API_URL atau NEXT_PUBLIC_EMAIL_API_URL.",
+              "Domain backend tidak tersedia. Konfigurasi EMAIL_API_URL, NEXT_PUBLIC_EMAIL_API_URL, atau NEXT_PUBLIC_API_URL.",
           },
           { status: 503 }
         )
