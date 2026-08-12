@@ -5,6 +5,8 @@ import { getAuthUser } from "@/lib/auth"
 import { isAdminRequest } from "@/lib/admin-session"
 import { connectDB, hasMongoConfig } from "@/lib/db"
 import { canSeeDomain } from "@/lib/domain-access"
+import { uniqueDomainsByName } from "@/lib/domain-list"
+import { isSupportedBackendDomainStatus } from "@/lib/domain-support"
 import { resolveDomainSource } from "@/lib/domain-source"
 import {
   getMxVerificationError,
@@ -15,9 +17,13 @@ import {
 } from "@/lib/domain-validation"
 import {
   fetchEmailApiSystemDomains,
+  filterSupportedEmailApiDomains,
   syncSystemDomainsFromEmailApi,
 } from "@/lib/system-domains"
 import { Domain as DomainModel } from "@/models/domain.model"
+import { getBackendDomainStatus } from "@/services/backend.service"
+
+const UNSUPPORTED_DOMAIN_REASON = "Email backend does not support this domain"
 
 function isNestedSubdomain(domainName: string, allNames: string[]) {
   return allNames.some(
@@ -125,10 +131,38 @@ export async function GET() {
         isAdminSession,
       })
     })
-    const visibleDomainNames = visibleDomains.map((domain) => domain.name)
+    const support = await filterSupportedEmailApiDomains(
+      visibleDomains.map((domain) => domain.name)
+    )
+    const supportedOrUnknownNames = new Set([
+      ...support.supported,
+      ...support.unknown,
+    ])
+
+    if (support.unsupported.length > 0) {
+      await DomainModel.updateMany(
+        { name: { $in: support.unsupported } },
+        {
+          $set: {
+            isVerified: false,
+            isBanned: true,
+            banReason: UNSUPPORTED_DOMAIN_REASON,
+          },
+        }
+      )
+    }
+
+    const supportedVisibleDomains = uniqueDomainsByName(
+      visibleDomains.filter((domain) =>
+        supportedOrUnknownNames.has(normalizeDomain(domain.name))
+      )
+    )
+    const visibleDomainNames = supportedVisibleDomains.map(
+      (domain) => domain.name
+    )
 
     return NextResponse.json(
-      visibleDomains
+      supportedVisibleDomains
         .filter((domain) => !isNestedSubdomain(domain.name, visibleDomainNames))
         .map((domain) => ({
           id: domain._id.toString(),
@@ -177,6 +211,22 @@ export async function POST(req: Request) {
 
   if (verificationError) {
     return NextResponse.json({ error: verificationError }, { status: 400 })
+  }
+
+  try {
+    const status = await getBackendDomainStatus(normalized)
+    if (!isSupportedBackendDomainStatus(status)) {
+      return NextResponse.json(
+        { error: "Domain tidak support untuk menerima email" },
+        { status: 400 }
+      )
+    }
+  } catch (error) {
+    console.warn("[domains:post] failed to verify backend support", error)
+    return NextResponse.json(
+      { error: "Gagal memverifikasi support domain di backend email" },
+      { status: 503 }
+    )
   }
 
   await connectDB()

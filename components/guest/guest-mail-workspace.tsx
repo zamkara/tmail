@@ -45,6 +45,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { uniqueDomainsByName } from "@/lib/domain-list"
+import { isSupportedBackendDomainStatus } from "@/lib/domain-support"
 import { isValidDomain, normalizeDomain } from "@/lib/domain-validation"
 import { resolveDomainSource } from "@/lib/domain-source"
 import {
@@ -216,11 +218,13 @@ async function fetchDomainStatus(domain: string) {
 }
 
 function getPublicDomains(domains: Domain[]) {
-  return domains.filter(
-    (domain) =>
-      domain.visibility !== "private" &&
-      domain.isVerified !== false &&
-      domain.isBanned !== true
+  return uniqueDomainsByName(
+    domains.filter(
+      (domain) =>
+        domain.visibility !== "private" &&
+        domain.isVerified !== false &&
+        domain.isBanned !== true
+    )
   )
 }
 
@@ -317,10 +321,7 @@ function isDomainStatusAvailable(status: BackendDomainStatus | null) {
   if (!status) return false
 
   return (
-    status.active &&
-    status.approved &&
-    status.mx_valid &&
-    !isRegisteredPrivateDomain(status)
+    isSupportedBackendDomainStatus(status) && !isRegisteredPrivateDomain(status)
   )
 }
 
@@ -389,6 +390,9 @@ export default function GuestMailWorkspace({
   const [isLoadingDomains, setIsLoadingDomains] = useState(false)
   const [domainLoadError, setDomainLoadError] = useState<string | null>(null)
   const [domainLoadRequest, setDomainLoadRequest] = useState(0)
+  const [unsupportedDomainNames, setUnsupportedDomainNames] = useState<
+    Set<string>
+  >(() => new Set())
   const [appSettings, setAppSettings] = useState<PublicAppSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [domainStatus, setDomainStatus] = useState<BackendDomainStatus | null>(
@@ -504,7 +508,13 @@ export default function GuestMailWorkspace({
     }
   }, [domainLoadRequest, setDomains])
 
-  const publicDomains = useMemo(() => getPublicDomains(domains), [domains])
+  const publicDomains = useMemo(
+    () =>
+      getPublicDomains(domains).filter(
+        (domain) => !unsupportedDomainNames.has(normalizeDomain(domain.name))
+      ),
+    [domains, unsupportedDomainNames]
+  )
   const requestedEmail = initialEmail ?? searchParams.get("email")
   const hasRequestedEmail = Boolean(requestedEmail)
 
@@ -660,15 +670,37 @@ export default function GuestMailWorkspace({
     if (isLoadingDomains) return
     if (!activeAddress || !activeDomainUnavailable) return
 
+    const unsupportedDomainName = normalizeDomain(
+      activeMatchingPublicDomain?.name ?? activeAddressDomain
+    )
+    if (unsupportedDomainName) {
+      setUnsupportedDomainNames((current) => {
+        if (current.has(unsupportedDomainName)) return current
+
+        const next = new Set(current)
+        next.add(unsupportedDomainName)
+        return next
+      })
+      setDomains(
+        domains.filter(
+          (domain) => normalizeDomain(domain.name) !== unsupportedDomainName
+        )
+      )
+    }
+
     removeAddress(activeAddress.id)
     resetInbox()
   }, [
     activeAddress,
+    activeAddressDomain,
+    activeMatchingPublicDomain,
     activeDomainUnavailable,
+    domains,
     hasRequestedEmail,
     isLoadingDomains,
     removeAddress,
     resetInbox,
+    setDomains,
     user,
   ])
 

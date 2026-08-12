@@ -28,6 +28,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import InboxCtaButton from "@/components/guest/inbox-cta-button"
+import { uniqueDomainsByName } from "@/lib/domain-list"
 import { resolveDomainSource } from "@/lib/domain-source"
 import { generateAddress } from "@/services/address.service"
 import { getDomains } from "@/services/domain.service"
@@ -55,11 +56,13 @@ function sortDomains(domains: Domain[]) {
 }
 
 function getPublicDomains(domains: Domain[]) {
-  return domains.filter(
-    (domain) =>
-      domain.visibility !== "private" &&
-      domain.isVerified !== false &&
-      domain.isBanned !== true
+  return uniqueDomainsByName(
+    domains.filter(
+      (domain) =>
+        domain.visibility !== "private" &&
+        domain.isVerified !== false &&
+        domain.isBanned !== true
+    )
   )
 }
 
@@ -174,7 +177,9 @@ export default function DomainAddressSwitcher({
       setOpen(false)
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to create email address"
+        error instanceof Error
+          ? error.message
+          : "Failed to create email address"
       )
     } finally {
       setLoadingDomainId(null)
@@ -206,7 +211,9 @@ export default function DomainAddressSwitcher({
       toast.success("Email address created")
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to create email address"
+        error instanceof Error
+          ? error.message
+          : "Failed to create email address"
       )
     } finally {
       setLoadingDomainId(null)
@@ -270,7 +277,10 @@ export default function DomainAddressSwitcher({
                     : (activeAddress?.address ?? "Select address")}
                 </span>
                 {!isLoadingDomains ? (
-                  <MailIcon className="hidden size-4 md:block" data-icon="inline-end" />
+                  <MailIcon
+                    className="hidden size-4 md:block"
+                    data-icon="inline-end"
+                  />
                 ) : null}
               </Button>
             </TooltipTrigger>

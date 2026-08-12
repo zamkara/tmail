@@ -3,9 +3,15 @@ import { NextResponse } from "next/server"
 import { isAdminRequest } from "@/lib/admin-session"
 import { connectDB, hasMongoConfig } from "@/lib/db"
 import { normalizeDomain } from "@/lib/domain-validation"
+import { isSupportedBackendDomainStatus } from "@/lib/domain-support"
 import { resolveDomainSource } from "@/lib/domain-source"
 import { Domain } from "@/models/domain.model"
-import { buildBackendUrl } from "@/services/backend.service"
+import {
+  buildBackendUrl,
+  type BackendDomainStatus,
+} from "@/services/backend.service"
+
+const UNSUPPORTED_DOMAIN_REASON = "Email backend does not support this domain"
 
 export const dynamic = "force-dynamic"
 
@@ -28,11 +34,12 @@ export async function GET(req: Request) {
   target.searchParams.set("domain", domain)
 
   const res = await fetch(target, { cache: "no-store" })
-  const data = (await res.json().catch(() => null)) as
-    | Record<string, unknown>
-    | null
+  const data = (await res.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null
 
-  if (data && hasMongoConfig()) {
+  if (res.ok && data && hasMongoConfig()) {
     try {
       const isAdminSession = await isAdminRequest()
       await connectDB()
@@ -41,6 +48,22 @@ export async function GET(req: Request) {
       const appDomain = normalizedDomain
         ? await Domain.findOne({ name: normalizedDomain }).lean()
         : null
+
+      if (
+        normalizedDomain &&
+        !isSupportedBackendDomainStatus(data as unknown as BackendDomainStatus)
+      ) {
+        await Domain.updateMany(
+          { name: normalizedDomain },
+          {
+            $set: {
+              isVerified: false,
+              isBanned: true,
+              banReason: UNSUPPORTED_DOMAIN_REASON,
+            },
+          }
+        )
+      }
 
       if (appDomain) {
         const source = resolveDomainSource(appDomain)
