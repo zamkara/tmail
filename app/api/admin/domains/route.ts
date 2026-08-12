@@ -2,9 +2,11 @@ import { NextResponse } from "next/server"
 
 import { isAdminRequest } from "@/lib/admin-session"
 import { connectDB } from "@/lib/db"
+import { isSupportedBackendDomainStatus } from "@/lib/domain-support"
 import { isValidDomain, normalizeDomain } from "@/lib/domain-validation"
 import { resolveDomainSource } from "@/lib/domain-source"
 import { Domain } from "@/models/domain.model"
+import { getBackendDomainStatus } from "@/services/backend.service"
 
 export async function POST(req: Request) {
   if (!(await isAdminRequest(req))) {
@@ -25,6 +27,22 @@ export async function POST(req: Request) {
 
   if (!name || !isValidDomain(name)) {
     return NextResponse.json({ error: "Invalid domain" }, { status: 400 })
+  }
+
+  try {
+    const status = await getBackendDomainStatus(name)
+    if (!isSupportedBackendDomainStatus(status)) {
+      return NextResponse.json(
+        { error: "Domain tidak support untuk menerima email" },
+        { status: 400 }
+      )
+    }
+  } catch (error) {
+    console.warn("[admin:domains:post] failed to verify backend support", error)
+    return NextResponse.json(
+      { error: "Gagal memverifikasi support domain di backend email" },
+      { status: 503 }
+    )
   }
 
   await connectDB()

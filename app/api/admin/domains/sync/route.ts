@@ -20,7 +20,13 @@ export async function POST(req: Request) {
   }
 
   const synced = await syncSystemDomainsFromEmailApi()
-  const domains = await Domain.find({ type: "system" }).sort({ name: 1 }).lean()
+  const domains = await Domain.find({
+    type: "system",
+    isVerified: true,
+    isBanned: { $ne: true },
+  })
+    .sort({ name: 1 })
+    .lean()
 
   return NextResponse.json({
     synced,

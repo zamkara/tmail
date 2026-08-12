@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="fix/TMAIL-${TIMESTAMP}-production-public-origin-redirect"
+BRANCH_NAME="fix/TMAIL-${TIMESTAMP}-supported-domain-dedupe"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,21 +28,20 @@ fi
 git add -A -- ':!/.pnpm-store' ':!/.pnpm-store/**'
 
 COMMIT_MSG=$(cat <<'EOF'
-fix: use public origin for production redirects
+fix: filter unsupported domains and dedupe domain lists
 
 Main changes:
-- add shared public-origin resolver using forwarded headers and production URL env fallbacks
-- update auth middleware redirects so `/inbox`, `/signin`, and guest-only redirects no longer point to internal `localhost:8901`
-- update guest email context redirect to return to the production public domain instead of the internal container host
-- use the same secure-request detection for login, register, and admin session cookies behind reverse proxies
-- document the supported backend domain env message with `NEXT_PUBLIC_API_URL`
+- validate backend `/random-domain` candidates against `/domains/status` before saving system domains
+- mark existing unsupported system domains as unverified/banned so they disappear from public domain lists
+- reject custom/admin domain registration when backend status is not active, approved, and MX-valid
+- stop guest auto-generation from reusing a domain after it is detected as unsupported
+- dedupe domains by normalized name in the API response, persisted domain store, and guest domain selector
 
 Testing:
 - [x] `./node_modules/.bin/tsc --noEmit`
 - [x] `./node_modules/.bin/next build`
-- [x] Production runtime `/api/guest-email-context` redirects to `https://app.thvuinin.my.id/` with internal `Host: localhost:8901`
-- [x] Production runtime `/inbox` redirects to `https://app.thvuinin.my.id/signin` with forwarded production headers
-- [ ] Verify redirect on the live production reverse proxy after redeploy
+- [x] Domain selector no longer shows duplicate names after store/API dedupe
+- [ ] Verify live production domain sync removes unsupported domains after backend status is healthy
 EOF
 )
 

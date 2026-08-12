@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
 
+import { uniqueDomainsByName } from "@/lib/domain-list"
 import type { Domain } from "@/types"
 
 interface DomainStore {
@@ -17,13 +18,18 @@ export const useDomainStore = create<DomainStore>()(
     (set) => ({
       domains: [],
       isLoaded: false,
-      setDomains: (domains) => set({ domains, isLoaded: true }),
+      setDomains: (domains) =>
+        set({ domains: uniqueDomainsByName(domains), isLoaded: true }),
       addDomain: (domain) =>
-        set((state) => ({ domains: [...state.domains, domain] })),
+        set((state) => ({
+          domains: uniqueDomainsByName([...state.domains, domain]),
+        })),
       updateDomain: (domain) =>
         set((state) => ({
-          domains: state.domains.map((currentDomain) =>
-            currentDomain.id === domain.id ? domain : currentDomain
+          domains: uniqueDomainsByName(
+            state.domains.map((currentDomain) =>
+              currentDomain.id === domain.id ? domain : currentDomain
+            )
           ),
         })),
       removeDomain: (id) =>
