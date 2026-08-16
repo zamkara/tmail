@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="fix/TMAIL-${TIMESTAMP}-android-app-icon-branding"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-terms-and-legal-policies"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,17 +28,20 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-fix: unify android and browser tab icons
+feat: add terms and legal policies page
 
 Main changes:
-- add a dedicated web app manifest for `Pusat Mail` so Android home screen installs use explicit app metadata instead of browser defaults
-- update root metadata icons so browser tabs, shortcuts, Apple web app icons, and manifest icons all point to `public/ic_tmail.svg`
-- keep application name and Apple web app metadata aligned with the `Pusat Mail` branding
+- add a responsive `/terms-and-conditions` page using the existing Pusat Mail theme, typography, cards, buttons, and light/dark mode styling
+- publish the complete Terms of Service, Privacy Policy, and Abuse Policy with section navigation and last-updated information
+- add Pusat Mail branding, a return-to-home action, and a theme toggle to the legal page header
+- add a two-line global footer with bold direct links to the Terms, Privacy, and Abuse policy sections
 
 Testing:
 - [x] `pnpm typecheck`
-- [ ] Verify Android Chrome uses the `ic_tmail.svg` icon after clearing cached site data and re-adding the shortcut
-- [ ] Verify browser tab and installed/add-to-home-screen shortcuts now show the same icon asset
+- [x] `pnpm build`
+- [ ] Verify the bold Terms, Privacy, and Abuse footer links open their matching policy sections
+- [ ] Verify all legal sections and anchor navigation on desktop and mobile
+- [ ] Verify the legal page in both light and dark themes
 EOF
 )
 
