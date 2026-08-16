@@ -28,17 +28,17 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-fix: replace android app icon branding assets
+fix: unify android and browser tab icons
 
 Main changes:
-- add a dedicated web app manifest for `Pusat Mail` so Android home screen installs use branded metadata instead of browser defaults
-- update root metadata icons to prefer `public/logo.png` for standard, shortcut, and Apple touch icons while keeping the SVG icon as an additional source
-- set application name and Apple web app metadata so installed mobile shortcuts use the correct product identity
+- add a dedicated web app manifest for `Pusat Mail` so Android home screen installs use explicit app metadata instead of browser defaults
+- update root metadata icons so browser tabs, shortcuts, Apple web app icons, and manifest icons all point to `public/ic_tmail.svg`
+- keep application name and Apple web app metadata aligned with the `Pusat Mail` branding
 
 Testing:
 - [x] `pnpm typecheck`
-- [ ] Verify Android Chrome uses the new `Pusat Mail` icon after clearing cached site data and re-adding the shortcut
-- [ ] Verify installed/add-to-home-screen shortcuts no longer show the previous Vercel/default icon
+- [ ] Verify Android Chrome uses the `ic_tmail.svg` icon after clearing cached site data and re-adding the shortcut
+- [ ] Verify browser tab and installed/add-to-home-screen shortcuts now show the same icon asset
 EOF
 )
 
