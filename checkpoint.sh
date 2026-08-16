@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="fix/TMAIL-${TIMESTAMP}-supported-domain-dedupe"
+BRANCH_NAME="fix/TMAIL-${TIMESTAMP}-android-app-icon-branding"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -25,23 +25,20 @@ else
   git checkout -b "$BRANCH_NAME"
 fi
 
-git add -A -- ':!/.pnpm-store' ':!/.pnpm-store/**'
+git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-fix: filter unsupported domains and dedupe domain lists
+fix: replace android app icon branding assets
 
 Main changes:
-- validate backend `/random-domain` candidates against `/domains/status` before saving system domains
-- mark existing unsupported system domains as unverified/banned so they disappear from public domain lists
-- reject custom/admin domain registration when backend status is not active, approved, and MX-valid
-- stop guest auto-generation from reusing a domain after it is detected as unsupported
-- dedupe domains by normalized name in the API response, persisted domain store, and guest domain selector
+- add a dedicated web app manifest for `Pusat Mail` so Android home screen installs use branded metadata instead of browser defaults
+- update root metadata icons to prefer `public/logo.png` for standard, shortcut, and Apple touch icons while keeping the SVG icon as an additional source
+- set application name and Apple web app metadata so installed mobile shortcuts use the correct product identity
 
 Testing:
-- [x] `./node_modules/.bin/tsc --noEmit`
-- [x] `./node_modules/.bin/next build`
-- [x] Domain selector no longer shows duplicate names after store/API dedupe
-- [ ] Verify live production domain sync removes unsupported domains after backend status is healthy
+- [x] `pnpm typecheck`
+- [ ] Verify Android Chrome uses the new `Pusat Mail` icon after clearing cached site data and re-adding the shortcut
+- [ ] Verify installed/add-to-home-screen shortcuts no longer show the previous Vercel/default icon
 EOF
 )
 

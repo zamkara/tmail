@@ -10,10 +10,21 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 
 export const metadata: Metadata = {
   title: "Pusat Mail",
+  applicationName: "Pusat Mail",
+  manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/ic_tmail.svg",
-    shortcut: "/ic_tmail.svg",
-    apple: "/ic_tmail.svg",
+    icon: [
+      { url: "/logo.png", type: "image/png", sizes: "192x192" },
+      { url: "/logo.png", type: "image/png", sizes: "512x512" },
+      { url: "/ic_tmail.svg", type: "image/svg+xml" },
+    ],
+    shortcut: ["/logo.png"],
+    apple: [{ url: "/logo.png", sizes: "180x180", type: "image/png" }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Pusat Mail",
+    statusBarStyle: "default",
   },
 }
 
