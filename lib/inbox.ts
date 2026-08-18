@@ -30,13 +30,23 @@ export function resolveActiveAddress(
   return addresses.find((address) => address.id === activeAddressId) ?? null
 }
 
+function usesLegacyInboxSlug(
+  slug: string[] | undefined,
+  address: GeneratedAddress | null
+) {
+  if (!slug || !address) return false
+  if (slug[0] === address.id) return false
+
+  return slug.length >= 2 && address.username === slug[0] && address.domainName === slug[1]
+}
+
 export function getMailIdFromSlug(
   slug: string[] | undefined,
   address: GeneratedAddress | null
 ) {
   if (!slug || !address) return null
 
-  const baseLength = address.username ? 2 : 1
+  const baseLength = usesLegacyInboxSlug(slug, address) ? 2 : 1
   const mailId = slug[baseLength]
   if (!mailId || mailId === "junk" || mailId === "trash") return null
 
@@ -44,9 +54,7 @@ export function getMailIdFromSlug(
 }
 
 export function buildInboxHref(address: GeneratedAddress) {
-  return address.username
-    ? `/inbox/${address.username}/${address.domainName}`
-    : `/inbox/${address.id}`
+  return `/inbox/${address.id}`
 }
 
 export function buildInboxFolderHref(

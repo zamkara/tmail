@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { canGuestAccessInboxAddress } from "@/lib/guest-domain-access"
 import { isBlockedInboxMessage } from "@/lib/platform-ban"
 import { buildBackendUrl, getBackendBaseUrl } from "@/services/backend.service"
 
@@ -7,10 +8,19 @@ const BASE = getBackendBaseUrl()
 export const dynamic = "force-dynamic"
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ mailId: string }> }
 ) {
   const { mailId } = await params
+  const address = new URL(req.url).searchParams.get("address")
+
+  if (address && !(await canGuestAccessInboxAddress(address))) {
+    return NextResponse.json(
+      { error: "Domain registered for private use only" },
+      { status: 403 }
+    )
+  }
+
   if (!BASE) {
     return NextResponse.json(
       { error: "Email API tidak dikonfigurasi" },

@@ -64,7 +64,14 @@ function findAddressFromPath(
 function getMailIdFromPath(rest: string[], address: GeneratedAddress | null) {
   if (!address) return null
 
-  const baseLength = address.username ? 2 : 1
+  const baseLength =
+    rest[0] === address.id
+      ? 1
+      : rest.length >= 2 &&
+          address.username === rest[0] &&
+          address.domainName === rest[1]
+        ? 2
+        : 1
   return rest.length > baseLength ? (rest[baseLength] ?? null) : null
 }
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { canGuestAccessInboxAddress } from "@/lib/guest-domain-access"
 import { filterBlockedInboxMessages } from "@/lib/platform-ban"
 import { buildBackendUrl, getBackendBaseUrl } from "@/services/backend.service"
 
@@ -27,6 +28,21 @@ export async function GET(req: Request) {
 
   if (!address)
     return NextResponse.json({ error: "address wajib diisi" }, { status: 400 })
+
+  if (!(await canGuestAccessInboxAddress(address))) {
+    return NextResponse.json(
+      {
+        messages: [],
+        error: "Domain registered for private use only",
+      },
+      {
+        status: 403,
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      }
+    )
+  }
 
   if (!BASE) {
     return NextResponse.json(
@@ -102,6 +118,13 @@ export async function DELETE(req: Request) {
 
   if (!address)
     return NextResponse.json({ error: "address wajib diisi" }, { status: 400 })
+
+  if (!(await canGuestAccessInboxAddress(address))) {
+    return NextResponse.json(
+      { error: "Domain registered for private use only" },
+      { status: 403 }
+    )
+  }
 
   if (!BASE) {
     return NextResponse.json(

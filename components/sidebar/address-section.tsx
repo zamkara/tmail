@@ -16,6 +16,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
+import { Input } from "@/components/ui/input"
 import { InputGroup, InputGroupAddon } from "@/components/ui/input-group"
 import {
   SidebarGroup,
@@ -32,6 +33,18 @@ import { useDomainStore } from "@/stores/domain.store"
 import { useInboxStore } from "@/stores/inbox.store"
 import { Command as CommandPrimitive } from "cmdk"
 import type { Domain } from "@/types"
+
+function randomLocalPart() {
+  const chars = "abcdefghijklmnopqrstuvwxyz"
+  return Array.from(
+    { length: 7 },
+    () => chars[Math.floor(Math.random() * chars.length)]
+  ).join("")
+}
+
+function isValidLocalPart(value: string) {
+  return /^[a-z0-9][a-z0-9._-]{0,63}$/.test(value)
+}
 
 function sortDomains(domains: Domain[]) {
   return [...domains].sort((first, second) => {
@@ -60,6 +73,11 @@ export default function AddressSection({ compact = false }: { compact?: boolean 
   const resetInbox = useInboxStore((s) => s.resetInbox)
   const [open, setOpen] = useState(false)
   const [loadingDomainId, setLoadingDomainId] = useState<string | null>(null)
+  const [selectedDomain, setSelectedDomain] = useState<Domain | null>(null)
+  const [usernameMode, setUsernameMode] = useState<"random" | "manual">(
+    "random"
+  )
+  const [localPart, setLocalPart] = useState("")
   const router = useRouter()
 
   useEffect(() => {
@@ -72,11 +90,17 @@ export default function AddressSection({ compact = false }: { compact?: boolean 
   const usableDomains = sortDomains(domains.filter(canGenerateFromDomain))
   const isGenerating = loadingDomainId !== null
 
-  async function handleGenerateAddress(domain: Domain) {
+  async function handleGenerateAddress(domain: Domain, nextLocalPart = "") {
     setLoadingDomainId(domain.id)
 
     try {
-      const address = await generateAddress(domain.id, domain.name, Boolean(user))
+      const address = await generateAddress(
+        domain.id,
+        domain.name,
+        Boolean(user),
+        "",
+        nextLocalPart
+      )
       resetInbox()
       addAddress(address)
       setActiveAddress(address.id)
@@ -99,6 +123,39 @@ export default function AddressSection({ compact = false }: { compact?: boolean 
       usableDomains[Math.floor(Math.random() * usableDomains.length)]
     await handleGenerateAddress(domain)
   }
+
+  function resetCreateFlow(nextOpen: boolean) {
+    setOpen(nextOpen)
+    if (!nextOpen) {
+      setSelectedDomain(null)
+      setUsernameMode("random")
+      setLocalPart("")
+      setLoadingDomainId(null)
+    }
+  }
+
+  async function handleCreateSelectedDomain() {
+    if (!selectedDomain || isGenerating) return
+
+    const nextLocalPart = localPart.trim().toLowerCase()
+    if (usernameMode === "manual" && !isValidLocalPart(nextLocalPart)) {
+      toast.error(
+        "Use 1-64 characters: lowercase letters, numbers, dots, dashes, or underscores."
+      )
+      return
+    }
+
+    await handleGenerateAddress(
+      selectedDomain,
+      usernameMode === "manual" ? nextLocalPart : ""
+    )
+    resetCreateFlow(false)
+  }
+
+  const previewLocalPart =
+    usernameMode === "manual"
+      ? localPart.trim().toLowerCase() || "username"
+      : "random"
 
   return (
     <SidebarGroup>
@@ -144,9 +201,9 @@ export default function AddressSection({ compact = false }: { compact?: boolean 
       </SidebarGroupContent>
       <CommandDialog
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={resetCreateFlow}
         title="Create email address"
-        description="Choose a domain for the new email address."
+        description="Choose a domain, then create a random or custom username."
         className="sm:max-w-md"
       >
         <Command>
@@ -177,7 +234,12 @@ export default function AddressSection({ compact = false }: { compact?: boolean 
                         key={domain.id}
                         value={domain.name}
                         disabled={isGenerating}
-                        onSelect={() => void handleGenerateAddress(domain)}
+                        onSelect={() => {
+                          setSelectedDomain(domain)
+                          if (usernameMode === "random" && !localPart) {
+                            setLocalPart(randomLocalPart())
+                          }
+                        }}
                       >
                         {isLoading ? <Spinner /> : <GlobeIcon />}
                         <span className="min-w-0 flex-1 truncate">
@@ -195,6 +257,75 @@ export default function AddressSection({ compact = false }: { compact?: boolean 
               </>
             )}
           </CommandList>
+          {selectedDomain ? (
+            <div className="border-t p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{selectedDomain.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Preview: {previewLocalPart}@{selectedDomain.name}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant={usernameMode === "random" ? "default" : "outline"}
+                    size="sm"
+                    disabled={isGenerating}
+                    onClick={() => {
+                      setUsernameMode("random")
+                      setLocalPart(randomLocalPart())
+                    }}
+                  >
+                    Random
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={usernameMode === "manual" ? "default" : "outline"}
+                    size="sm"
+                    disabled={isGenerating}
+                    onClick={() => setUsernameMode("manual")}
+                  >
+                    Manual
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center gap-2">
+                <Input
+                  value={localPart}
+                  onChange={(event) =>
+                    setLocalPart(event.target.value.toLowerCase())
+                  }
+                  placeholder="username"
+                  disabled={isGenerating || usernameMode !== "manual"}
+                />
+                <span className="max-w-[42%] truncate text-sm text-muted-foreground">
+                  @{selectedDomain.name}
+                </span>
+              </div>
+              <div className="mt-3 flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isGenerating}
+                  onClick={() => setSelectedDomain(null)}
+                >
+                  Back
+                </Button>
+                <Button
+                  type="button"
+                  disabled={
+                    isGenerating ||
+                    (usernameMode === "manual" && !localPart.trim())
+                  }
+                  onClick={() => void handleCreateSelectedDomain()}
+                >
+                  {isGenerating ? <Spinner data-icon="inline-start" /> : null}
+                  Create
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </Command>
       </CommandDialog>
     </SidebarGroup>

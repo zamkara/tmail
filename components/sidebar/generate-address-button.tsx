@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { SparklesIcon } from "lucide-react"
-import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -21,27 +20,13 @@ export default function GenerateAddressButton({
   domainId,
   domainName,
 }: GenerateAddressButtonProps) {
-  const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
-  const addresses = useAddressStore((state) => state.addresses)
   const addAddress = useAddressStore((state) => state.addAddress)
   const setActiveAddress = useAddressStore((state) => state.setActiveAddress)
   const resetInbox = useInboxStore((s) => s.resetInbox)
   const user = useAuthStore((s) => s.user)
 
   async function handleGenerate() {
-    const existingAddress = addresses.find(
-      (address) =>
-        address.domainId === domainId &&
-        new Date(address.expiresAt) > new Date()
-    )
-
-    if (existingAddress) {
-      setActiveAddress(existingAddress.id)
-      router.push(`/inbox/${existingAddress.id}`)
-      return
-    }
-
     setIsLoading(true)
 
     try {

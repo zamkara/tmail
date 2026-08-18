@@ -11,12 +11,13 @@ export async function getAddresses(): Promise<GeneratedAddress[]> {
 // Untuk user login: generate via API (tersimpan di DB)
 export async function generateAddressForUser(
   domainId: string,
-  subdomain = ""
+  subdomain = "",
+  localPart = ""
 ): Promise<GeneratedAddress> {
   const res = await fetch("/api/addresses", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ domainId, subdomain }),
+    body: JSON.stringify({ domainId, subdomain, localPart }),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error ?? "Failed to create address")
@@ -90,9 +91,10 @@ export async function generateAddress(
   domainId: string,
   domainName: string,
   isLoggedIn = false,
-  subdomain = ""
+  subdomain = "",
+  localPart = ""
 ): Promise<GeneratedAddress> {
-  if (isLoggedIn) return generateAddressForUser(domainId, subdomain)
+  if (isLoggedIn) return generateAddressForUser(domainId, subdomain, localPart)
   const resolvedDomain = subdomain ? `${subdomain}.${domainName}` : domainName
   return generateAddressLocally(domainId, resolvedDomain)
 }
