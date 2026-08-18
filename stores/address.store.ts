@@ -17,25 +17,17 @@ interface AddressStore {
   removeExpired: () => void
 }
 
-function keepLatestAddressPerDomain(addresses: GeneratedAddress[]) {
-  const latestByDomain = new Map<string, GeneratedAddress>()
+function mergeAddresses(addresses: GeneratedAddress[]) {
+  const byId = new Map<string, GeneratedAddress>()
 
   for (const address of addresses) {
-    const current = latestByDomain.get(address.domainId)
-    if (!current) {
-      latestByDomain.set(address.domainId, address)
-      continue
-    }
-
-    if (
-      new Date(address.createdAt).getTime() >
-      new Date(current.createdAt).getTime()
-    ) {
-      latestByDomain.set(address.domainId, address)
-    }
+    byId.set(address.id, address)
   }
 
-  return [...latestByDomain.values()]
+  return [...byId.values()].sort(
+    (first, second) =>
+      new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()
+  )
 }
 
 export const useAddressStore = create<AddressStore>()(
@@ -46,33 +38,25 @@ export const useAddressStore = create<AddressStore>()(
       isLoaded: false,
       setAddresses: (addresses) =>
         set({
-          addresses: keepLatestAddressPerDomain(addresses),
+          addresses: mergeAddresses(addresses),
           isLoaded: true,
         }),
       setLoaded: () => set({ isLoaded: true }),
       addAddress: (address) =>
         set((state) => ({
-          addresses: [
-            ...state.addresses.filter(
-              (currentAddress) => currentAddress.domainId !== address.domainId
-            ),
-            address,
-          ],
+          addresses: mergeAddresses([address, ...state.addresses]),
         })),
       addAddressAndSetActive: (address) =>
         set((state) => ({
-          addresses: [
-            ...state.addresses.filter(
-              (currentAddress) => currentAddress.domainId !== address.domainId
-            ),
-            address,
-          ],
+          addresses: mergeAddresses([address, ...state.addresses]),
           activeAddressId: address.id,
         })),
       updateAddress: (id, partial) =>
         set((state) => ({
-          addresses: state.addresses.map((addr) =>
-            addr.id === id ? { ...addr, ...partial } : addr
+          addresses: mergeAddresses(
+            state.addresses.map((addr) =>
+              addr.id === id ? { ...addr, ...partial } : addr
+            )
           ),
         })),
       removeAddress: (id) =>

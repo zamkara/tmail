@@ -628,9 +628,21 @@ export default function GuestMailWorkspace({
   const activeAddressDomain = activeAddressEmail
     ? getAddressDomain(activeAddressEmail)
     : ""
+  const normalizedActiveAddressDomain = normalizeDomain(activeAddressDomain)
   const activeMatchingPublicDomain = activeAddressDomain
     ? findMatchingDomain(activeAddressDomain, publicDomains)
     : null
+  const domainStatusMatchesActiveAddress = Boolean(
+    normalizedActiveAddressDomain &&
+      normalizeDomain(domainStatus?.domain ?? "") === normalizedActiveAddressDomain
+  )
+  const isWaitingForActiveDomainStatus = Boolean(
+    !user &&
+      normalizedActiveAddressDomain &&
+      !isLoadingDomains &&
+      !domainStatusError &&
+      !domainStatusMatchesActiveAddress
+  )
   const activeDomainUnavailable = Boolean(
     activeAddressDomain &&
     !isLoadingDomains &&
@@ -836,6 +848,13 @@ export default function GuestMailWorkspace({
         setError(null)
         return
       }
+      if (isWaitingForActiveDomainStatus) {
+        setEmails([])
+        setExpandedEmailId(null)
+        setEmailDetails({})
+        setError(null)
+        return
+      }
       if (activeDomainUnavailable) {
         setEmails([])
         setExpandedEmailId(null)
@@ -875,7 +894,7 @@ export default function GuestMailWorkspace({
 
             try {
               const detailData = await fetchJsonWithTimeout<BeInboxItem>(
-                `/api/inbox/${email.id}`
+                `/api/inbox/${email.id}?address=${encodeURIComponent(activeAddress.address)}`
               )
               const otp = detailData.otp ?? null
               otpCacheRef.current.set(email.id, otp)
@@ -908,7 +927,13 @@ export default function GuestMailWorkspace({
         }
       }
     },
-    [activeAddress, activeDomainUnavailable, domainAccessMessage, readIds]
+    [
+      activeAddress,
+      activeDomainUnavailable,
+      domainAccessMessage,
+      isWaitingForActiveDomainStatus,
+      readIds,
+    ]
   )
 
   async function handleDeleteAllMessages() {
@@ -968,6 +993,10 @@ export default function GuestMailWorkspace({
         return
       }
 
+      if (isWaitingForActiveDomainStatus || activeDomainUnavailable) {
+        return
+      }
+
       if (activeAddress && customEvent.detail.message?.id) {
         const nextEmail = mapEmailItem(
           customEvent.detail.message,
@@ -1022,12 +1051,22 @@ export default function GuestMailWorkspace({
         handleBackendWebSocketStatus
       )
     }
-  }, [activeAddress, activeAddressEmail, loadEmails, readIds, triggerAurora])
+  }, [
+    activeAddress,
+    activeAddressEmail,
+    activeDomainUnavailable,
+    isWaitingForActiveDomainStatus,
+    loadEmails,
+    readIds,
+    triggerAurora,
+  ])
 
   useEffect(() => {
+    setEmails([])
     setExpandedEmailId(null)
     setEmailDetails({})
     setError(null)
+    prevEmailCountRef.current = 0
   }, [activeAddress?.id])
 
   async function handleToggleEmail(email: EmailItem) {
@@ -1044,7 +1083,7 @@ export default function GuestMailWorkspace({
     if (!emailDetails[email.id]) {
       try {
         const data = await fetchJsonWithTimeout<BeInboxItem>(
-          `/api/inbox/${email.id}`
+          `/api/inbox/${email.id}?address=${encodeURIComponent(activeAddress.address)}`
         )
         const detail = mapEmailDetail(data, activeAddress)
         if (detail.otp) {

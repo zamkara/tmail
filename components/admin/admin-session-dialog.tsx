@@ -509,6 +509,49 @@ function AdminPanel({
     }
   }
 
+  async function bulkDeleteDomains(domainIds: string[]) {
+    if (domainIds.length === 0) return
+    if (
+      !window.confirm(
+        `Delete ${domainIds.length} selected domain(s) and related addresses?`
+      )
+    ) {
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const results = await Promise.allSettled(
+        domainIds.map(async (domainId) => {
+          const res = await fetch(`/api/admin/domains/${domainId}`, {
+            method: "DELETE",
+          })
+
+          if (!res.ok) {
+            const text = await res.text().catch(() => "")
+            throw new Error(text || "delete failed")
+          }
+        })
+      )
+
+      const failedCount = results.filter(
+        (result) => result.status === "rejected"
+      ).length
+      const deletedCount = domainIds.length - failedCount
+
+      if (deletedCount > 0) {
+        toast.success(`${deletedCount} domain(s) deleted`)
+      }
+      if (failedCount > 0) {
+        toast.error(`${failedCount} domain(s) failed to delete`)
+      }
+
+      await loadOverview()
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   async function toggleDomain(domain: AdminDomain) {
     setIsSaving(true)
     try {
@@ -977,6 +1020,7 @@ function AdminPanel({
                 disabled={isSaving}
                 onAdd={addDomain}
                 onDelete={deleteDomain}
+                onBulkDelete={bulkDeleteDomains}
                 onToggle={toggleDomain}
                 onUpdate={updateDomain}
                 onSync={syncDomains}
@@ -1341,6 +1385,7 @@ function DomainsModule({
   disabled,
   onAdd,
   onDelete,
+  onBulkDelete,
   onToggle,
   onUpdate,
   onSync,
@@ -1349,6 +1394,7 @@ function DomainsModule({
   disabled: boolean
   onAdd: (name: string) => Promise<void>
   onDelete: (domainId: string) => Promise<void>
+  onBulkDelete: (domainIds: string[]) => Promise<void>
   onToggle: (domain: AdminDomain) => Promise<void>
   onUpdate: (
     domainId: string,
@@ -1383,6 +1429,17 @@ function DomainsModule({
 
     return domainSortDirection === "asc" ? comparison : -comparison
   })
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const validIds = new Set(domains.map((domain) => domain.id))
+      const next = new Set(
+        [...prev].filter((selectedId) => validIds.has(selectedId))
+      )
+
+      return next.size === prev.size ? prev : next
+    })
+  }, [domains])
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -1455,6 +1512,17 @@ function DomainsModule({
             >
               <DownloadIcon data-icon="inline-start" />
               Export CSV
+              {selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={disabled || selectedIds.size === 0}
+              onClick={() => void onBulkDelete([...selectedIds])}
+            >
+              <TrashIcon data-icon="inline-start" />
+              Delete Selected
               {selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
             </Button>
             <Button

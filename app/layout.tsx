@@ -8,9 +8,18 @@ import { InboxStateSync } from "@/components/inbox-state-sync"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { getConfiguredPublicOrigin } from "@/lib/request-origin"
+
+const siteDescription =
+  "Create temporary email easily, quickly, and practically."
+const metadataBase = new URL(
+  getConfiguredPublicOrigin() || "http://localhost:3000"
+)
 
 export const metadata: Metadata = {
+  metadataBase,
   title: "Pusat Mail",
+  description: siteDescription,
   applicationName: "Pusat Mail",
   manifest: "/manifest.webmanifest",
   icons: {
@@ -22,6 +31,18 @@ export const metadata: Metadata = {
     capable: true,
     title: "Pusat Mail",
     statusBarStyle: "default",
+  },
+  openGraph: {
+    type: "website",
+    url: "/",
+    title: "Pusat Mail",
+    description: siteDescription,
+    siteName: "Pusat Mail",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Pusat Mail",
+    description: siteDescription,
   },
 }
 

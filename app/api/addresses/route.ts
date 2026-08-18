@@ -18,6 +18,10 @@ function normalizeSubdomain(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : ""
 }
 
+function normalizeLocalPart(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : ""
+}
+
 function isValidSubdomain(value: string) {
   if (!value) return true
 
@@ -26,11 +30,23 @@ function isValidSubdomain(value: string) {
     .every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))
 }
 
+function isValidLocalPart(value: string) {
+  return /^[a-z0-9][a-z0-9._-]{0,63}$/.test(value)
+}
+
 function slugify(value: string) {
   return value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
+}
+
+type SerializedAddressRecord = {
+  _id: { toString(): string }
+  address: string
+  domainId: { toString(): string }
+  createdAt: Date
+  expiresAt: Date
 }
 
 function serializeAddresses(
@@ -93,9 +109,11 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => null)) as {
       domainId?: unknown
       subdomain?: unknown
+      localPart?: unknown
     } | null
     const domainId = typeof body?.domainId === "string" ? body.domainId : ""
     const subdomain = normalizeSubdomain(body?.subdomain)
+    const requestedLocalPart = normalizeLocalPart(body?.localPart)
     if (!domainId)
       return NextResponse.json(
         { error: "domainId wajib diisi" },
@@ -104,6 +122,15 @@ export async function POST(req: Request) {
     if (!isValidSubdomain(subdomain)) {
       return NextResponse.json(
         { error: "Format subdomain tidak valid" },
+        { status: 400 }
+      )
+    }
+    if (requestedLocalPart && !isValidLocalPart(requestedLocalPart)) {
+      return NextResponse.json(
+        {
+          error:
+            "Use 1-64 characters: lowercase letters, numbers, dots, dashes, or underscores.",
+        },
         { status: 400 }
       )
     }
@@ -144,22 +171,9 @@ export async function POST(req: Request) {
     }
 
     const chars = "abcdefghijklmnopqrstuvwxyz"
-    const random = Array.from(
-      { length: 7 },
-      () => chars[Math.floor(Math.random() * chars.length)]
-    ).join("")
     const resolvedDomainName = subdomain
       ? `${subdomain}.${domain.name}`
       : domain.name
-
-    await Address.updateMany(
-      {
-        userId: auth.userId,
-        domainId: domain._id,
-        expiresAt: { $gt: now },
-      },
-      { $set: { expiresAt: now } }
-    )
 
     const remainingActiveAddresses = await Address.find({
       userId: auth.userId,
@@ -185,13 +199,52 @@ export async function POST(req: Request) {
     const expiresAt = new Date(
       now.getTime() + settings.addressTtlHours * 60 * 60 * 1000
     )
+    let address: SerializedAddressRecord | null = null
 
-    const address = await Address.create({
-      address: `${random}@${resolvedDomainName}`,
-      domainId: domain._id,
-      userId: auth.userId,
-      expiresAt,
-    })
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const generatedLocalPart =
+        requestedLocalPart ||
+        Array.from(
+          { length: 7 },
+          () => chars[Math.floor(Math.random() * chars.length)]
+        ).join("")
+
+      try {
+        address = (await Address.create({
+          address: `${generatedLocalPart}@${resolvedDomainName}`,
+          domainId: domain._id,
+          userId: auth.userId,
+          expiresAt,
+        })) as unknown as SerializedAddressRecord
+        break
+      } catch (error) {
+        const isDuplicateKeyError =
+          typeof error === "object" &&
+          error &&
+          "code" in error &&
+          error.code === 11000
+
+        if (!isDuplicateKeyError) {
+          throw error
+        }
+
+        if (requestedLocalPart) {
+          return NextResponse.json(
+            { error: "Email address is already taken" },
+            { status: 409 }
+          )
+        }
+      }
+    }
+
+    if (!address) {
+      return NextResponse.json(
+        { error: "Failed to generate a unique email address" },
+        { status: 409 }
+      )
+    }
+    const createdAddress = address
+
     const refreshedAddresses = await Address.find({
       userId: auth.userId,
       expiresAt: { $gt: now },
@@ -200,13 +253,13 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       address: {
-        id: address._id.toString(),
-        address: address.address,
-        domainId: address.domainId.toString(),
+        id: createdAddress._id.toString(),
+        address: createdAddress.address,
+        domainId: createdAddress.domainId.toString(),
         domainName: resolvedDomainName,
         username,
-        createdAt: address.createdAt,
-        expiresAt: address.expiresAt,
+        createdAt: createdAddress.createdAt,
+        expiresAt: createdAddress.expiresAt,
       },
       activeAddresses: serializeAddresses(refreshedAddresses, username),
     })
