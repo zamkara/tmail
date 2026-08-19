@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-address-flow-private-guard-and-social-preview"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-admin-address-uniqueness-toggle"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,22 +28,22 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-feat: improve address flows, private inbox access, and social branding
+feat: add admin control for address uniqueness rules
 
 Main changes:
-- block guest inbox list and detail access for private domains on both the server and guest workspace so private messages and OTPs never flash before the access check finishes
-- allow signed-in users to keep multiple active addresses on the same domain, stop replacing same-domain addresses on create, and route inbox pages by unique address id so duplicate-domain addresses stay clickable
-- expand the logged-in `New` address flow so users can pick a domain first and then create either a random username or a manual username with preview and duplicate validation
-- add admin bulk delete for selected domains in Domain Controls with a single confirmation and post-delete refresh
-- add branded Open Graph and Twitter preview images from the Pusat Mail icon, replace the stale Vercel favicon fallback, and publish absolute production metadata for sharing previews
+- add an admin settings flag to enforce or disable global address uniqueness from the Backend Console limits module
+- move duplicate-address enforcement out of the old global Mongo `address` unique index and into backend validation that can respect the admin toggle
+- allow the same email address to be reused across different users only when global uniqueness is disabled and the address belongs to a private user-owned domain
+- update user and admin address create/update routes to use the new ownership-aware conflict checks before saving addresses
+- migrate address indexing toward a scoped unique key on `address + userId` so one account can reuse its own addresses safely without cross-user collisions
 
 Testing:
 - [x] `pnpm typecheck`
-- [ ] Verify guest access to a private domain never shows inbox messages or OTP chips before the access error state
-- [ ] Verify signed-in users can create multiple active addresses on the same domain and open each inbox independently
-- [ ] Verify the `New` dialog supports both random and manual usernames and returns `already taken` for duplicate manual usernames
-- [ ] Verify admin Domain Controls can bulk delete selected domains and related addresses
-- [ ] Verify WhatsApp/Telegram/social previews use the Pusat Mail icon and generated preview image after cache busting
+- [ ] Verify `Enforce global address uniqueness` appears in admin Limits and persists after save
+- [ ] Verify duplicate addresses are blocked globally when the setting is enabled
+- [ ] Verify duplicate addresses can be reused by different users on owned private domains when the setting is disabled
+- [ ] Verify user and admin address update flows still reject invalid domain/address combinations
+- [ ] Verify Mongo can drop the old global `address_1` index and create the scoped `address_1_userId_1` index during runtime
 EOF
 )
 

@@ -110,6 +110,7 @@ interface AdminSettings {
   addressTtlHours: number
   allowGuestAddresses: boolean
   allowWildcardSubdomains: boolean
+  enforceGlobalAddressUniqueness: boolean
   inboxRefreshSeconds: number
   blockedSenderDomains: string[]
 }
@@ -3107,6 +3108,27 @@ function LimitsModule({
                   }))
                 }
               />
+            </Field>
+            <Field orientation="horizontal">
+              <FieldLabel htmlFor="global-address-uniqueness">
+                Enforce global address uniqueness
+              </FieldLabel>
+              <Switch
+                id="global-address-uniqueness"
+                checked={draft.enforceGlobalAddressUniqueness}
+                disabled={disabled}
+                onCheckedChange={(checked) =>
+                  setDraft((current) => ({
+                    ...current,
+                    enforceGlobalAddressUniqueness: checked,
+                  }))
+                }
+              />
+            </Field>
+            <Field>
+              <FieldDescription>
+                When enabled, one email address can only belong to one user globally. When disabled, the same address can be reused by different users only on domains owned by that specific user.
+              </FieldDescription>
             </Field>
           </FieldGroup>
         </CardContent>

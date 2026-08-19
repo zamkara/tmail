@@ -2,13 +2,15 @@ import mongoose, { type InferSchemaType } from "mongoose"
 
 const addressSchema = new mongoose.Schema(
   {
-    address: { type: String, required: true, unique: true, lowercase: true },
+    address: { type: String, required: true, lowercase: true },
     domainId: { type: mongoose.Schema.Types.ObjectId, ref: "Domain", required: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     expiresAt: { type: Date, required: true },
   },
   { timestamps: true }
 )
+
+addressSchema.index({ address: 1, userId: 1 }, { unique: true })
 
 export type AddressDoc = InferSchemaType<typeof addressSchema> & { _id: mongoose.Types.ObjectId }
 

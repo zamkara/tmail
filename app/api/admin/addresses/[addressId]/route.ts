@@ -1,6 +1,11 @@
 import mongoose from "mongoose"
 import { NextResponse } from "next/server"
 
+import { getAdminSettings } from "@/lib/admin-settings"
+import {
+  ensureAddressIndexes,
+  findAddressConflict,
+} from "@/lib/address-ownership"
 import { isAdminRequest } from "@/lib/admin-session"
 import { connectDB } from "@/lib/db"
 import { Address } from "@/models/address.model"
@@ -35,6 +40,8 @@ export async function PATCH(
   let nextAddressValue: string | null = null
 
   await connectDB()
+  await ensureAddressIndexes()
+  const settings = await getAdminSettings()
 
   if (typeof body?.userId === "string") {
     const user = await User.findById(body.userId).lean()
@@ -87,6 +94,32 @@ export async function PATCH(
       return NextResponse.json(
         { error: `Address must use ${domainName ?? "selected domain"}` },
         { status: 400 }
+      )
+    }
+
+    const effectiveUserId =
+      typeof body?.userId === "string" ? body.userId : current.userId.toString()
+    const effectiveDomain =
+      typeof body?.domainId === "string"
+        ? await Domain.findById(body.domainId).lean()
+        : await Domain.findById(current.domainId).lean()
+
+    if (!effectiveDomain) {
+      return NextResponse.json({ error: "Domain not found" }, { status: 404 })
+    }
+
+    const conflict = await findAddressConflict({
+      address: addressValue,
+      userId: effectiveUserId,
+      settings,
+      domain: effectiveDomain,
+      excludeAddressId: addressId,
+    })
+
+    if (conflict) {
+      return NextResponse.json(
+        { error: "Email address is already taken" },
+        { status: 409 }
       )
     }
   }
