@@ -2,6 +2,10 @@ import mongoose from "mongoose"
 import { NextResponse } from "next/server"
 
 import { getAdminSettings } from "@/lib/admin-settings"
+import {
+  ensureAddressIndexes,
+  findAddressConflict,
+} from "@/lib/address-ownership"
 import { getAuthUser } from "@/lib/auth"
 import { connectDB } from "@/lib/db"
 import { Address } from "@/models/address.model"
@@ -76,6 +80,7 @@ export async function PATCH(
   }
 
   await connectDB()
+  await ensureAddressIndexes()
   const settings = await getAdminSettings()
 
   if (subdomain && settings.allowWildcardSubdomains === false) {
@@ -107,6 +112,21 @@ export async function PATCH(
   const nextDomainName = subdomain ? `${subdomain}.${domain.name}` : domain.name
   const nextAddressValue = `${localPart}@${nextDomainName}`.toLowerCase()
 
+  const conflict = await findAddressConflict({
+    address: nextAddressValue,
+    userId: auth.userId,
+    settings,
+    domain,
+    excludeAddressId: addressId,
+  })
+
+  if (conflict) {
+    return NextResponse.json(
+      { error: "Email address is already taken" },
+      { status: 409 }
+    )
+  }
+
   try {
     const nextAddress = await Address.findOneAndUpdate(
       { _id: addressId, userId: auth.userId },
@@ -128,12 +148,7 @@ export async function PATCH(
       expiresAt: nextAddress.expiresAt,
     })
   } catch (error) {
-    if (
-      typeof error === "object" &&
-      error &&
-      "code" in error &&
-      error.code === 11000
-    ) {
+    if (typeof error === "object" && error && "code" in error && error.code === 11000) {
       return NextResponse.json(
         { error: "Email address is already taken" },
         { status: 409 }

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server"
 
 import { getAdminSettings } from "@/lib/admin-settings"
+import {
+  ensureAddressIndexes,
+  findAddressConflict,
+} from "@/lib/address-ownership"
 import { isAdminRequest } from "@/lib/admin-session"
 import { getAuthUser } from "@/lib/auth"
 import { connectDB } from "@/lib/db"
@@ -136,6 +140,7 @@ export async function POST(req: Request) {
     }
 
     await connectDB()
+    await ensureAddressIndexes()
     const settings = await getAdminSettings()
     const now = new Date()
 
@@ -210,8 +215,27 @@ export async function POST(req: Request) {
         ).join("")
 
       try {
+        const nextAddressValue = `${generatedLocalPart}@${resolvedDomainName}`
+        const conflict = await findAddressConflict({
+          address: nextAddressValue,
+          userId: auth.userId,
+          settings,
+          domain,
+        })
+
+        if (conflict) {
+          if (requestedLocalPart) {
+            return NextResponse.json(
+              { error: "Email address is already taken" },
+              { status: 409 }
+            )
+          }
+
+          continue
+        }
+
         address = (await Address.create({
-          address: `${generatedLocalPart}@${resolvedDomainName}`,
+          address: nextAddressValue,
           domainId: domain._id,
           userId: auth.userId,
           expiresAt,

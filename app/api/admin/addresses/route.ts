@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server"
 
+import { getAdminSettings } from "@/lib/admin-settings"
+import {
+  ensureAddressIndexes,
+  findAddressConflict,
+} from "@/lib/address-ownership"
 import { isAdminRequest } from "@/lib/admin-session"
 import { connectDB } from "@/lib/db"
 import { Address } from "@/models/address.model"
@@ -45,6 +50,8 @@ export async function POST(req: Request) {
   }
 
   await connectDB()
+  await ensureAddressIndexes()
+  const settings = await getAdminSettings()
 
   const [user, domain] = await Promise.all([
     User.findById(userId).lean(),
@@ -61,6 +68,20 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: `Address must use ${domain.name}` },
       { status: 400 }
+    )
+  }
+
+  const conflict = await findAddressConflict({
+    address,
+    userId,
+    settings,
+    domain,
+  })
+
+  if (conflict) {
+    return NextResponse.json(
+      { error: "Email address is already taken" },
+      { status: 409 }
     )
   }
 

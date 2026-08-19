@@ -6,6 +6,7 @@ export interface AppAdminSettings {
   addressTtlHours: number
   allowGuestAddresses: boolean
   allowWildcardSubdomains: boolean
+  enforceGlobalAddressUniqueness: boolean
   inboxRefreshSeconds: number
   blockedSenderDomains: string[]
 }
@@ -15,6 +16,7 @@ export const DEFAULT_ADMIN_SETTINGS: AppAdminSettings = {
   addressTtlHours: 24,
   allowGuestAddresses: true,
   allowWildcardSubdomains: true,
+  enforceGlobalAddressUniqueness: true,
   inboxRefreshSeconds: 30,
   blockedSenderDomains: [],
 }
@@ -35,6 +37,7 @@ export async function getAdminSettings() {
     addressTtlHours: settings.addressTtlHours,
     allowGuestAddresses: settings.allowGuestAddresses,
     allowWildcardSubdomains: settings.allowWildcardSubdomains,
+    enforceGlobalAddressUniqueness: settings.enforceGlobalAddressUniqueness,
     inboxRefreshSeconds: settings.inboxRefreshSeconds,
     blockedSenderDomains: settings.blockedSenderDomains ?? [],
   }
@@ -75,6 +78,10 @@ export function normalizeAdminSettingsPatch(value: unknown) {
 
   if (typeof input.allowWildcardSubdomains === "boolean") {
     patch.allowWildcardSubdomains = input.allowWildcardSubdomains
+  }
+
+  if (typeof input.enforceGlobalAddressUniqueness === "boolean") {
+    patch.enforceGlobalAddressUniqueness = input.enforceGlobalAddressUniqueness
   }
 
   if (typeof input.inboxRefreshSeconds === "number") {
