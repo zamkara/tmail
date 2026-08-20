@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-admin-address-uniqueness-toggle"
+BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-admin-address-bulk-actions-and-reuse"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,22 +28,20 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-feat: add admin control for address uniqueness rules
+feat: improve admin address actions and duplicate reuse flow
 
 Main changes:
-- add an admin settings flag to enforce or disable global address uniqueness from the Backend Console limits module
-- move duplicate-address enforcement out of the old global Mongo `address` unique index and into backend validation that can respect the admin toggle
-- allow the same email address to be reused across different users only when global uniqueness is disabled and the address belongs to a private user-owned domain
-- update user and admin address create/update routes to use the new ownership-aware conflict checks before saving addresses
-- migrate address indexing toward a scoped unique key on `address + userId` so one account can reuse its own addresses safely without cross-user collisions
+- let users reuse their own existing address instead of creating a duplicate row when global address uniqueness is disabled and the same manual address is requested again
+- return the refreshed active address list after reuse so the user address sidebar stays deduplicated without adding another address entry
+- add select-all and per-item checkbox controls to `Admin > Addresses` with a bulk `Delete Selected` action matching the Domains workflow
+- keep per-address edit and delete buttons isolated from row selection so address management stays predictable during bulk operations
 
 Testing:
 - [x] `pnpm typecheck`
-- [ ] Verify `Enforce global address uniqueness` appears in admin Limits and persists after save
-- [ ] Verify duplicate addresses are blocked globally when the setting is enabled
-- [ ] Verify duplicate addresses can be reused by different users on owned private domains when the setting is disabled
-- [ ] Verify user and admin address update flows still reject invalid domain/address combinations
-- [ ] Verify Mongo can drop the old global `address_1` index and create the scoped `address_1_userId_1` index during runtime
+- [ ] Verify requesting the same manual address twice with uniqueness `OFF` reuses the existing user address and does not add another address row
+- [ ] Verify requesting the same manual address with uniqueness `ON` still returns `Email address is already taken`
+- [ ] Verify `Admin > Addresses` supports single-select, select-all, and bulk delete with the expected confirmation flow
+- [ ] Verify address edit and delete buttons still work without toggling unexpected selections
 EOF
 )
 

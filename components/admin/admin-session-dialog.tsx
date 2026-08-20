@@ -735,6 +735,45 @@ function AdminPanel({
     }
   }
 
+  async function bulkDeleteAddresses(addressIds: string[]) {
+    if (addressIds.length === 0) return
+    if (!window.confirm(`Delete ${addressIds.length} selected address(es)?`)) {
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const results = await Promise.allSettled(
+        addressIds.map(async (addressId) => {
+          const res = await fetch(`/api/admin/addresses/${addressId}`, {
+            method: "DELETE",
+          })
+
+          if (!res.ok) {
+            const text = await res.text().catch(() => "")
+            throw new Error(text || "delete failed")
+          }
+        })
+      )
+
+      const failedCount = results.filter(
+        (result) => result.status === "rejected"
+      ).length
+      const deletedCount = addressIds.length - failedCount
+
+      if (deletedCount > 0) {
+        toast.success(`${deletedCount} address(es) deleted`)
+      }
+      if (failedCount > 0) {
+        toast.error(`${failedCount} address(es) failed to delete`)
+      }
+
+      await loadOverview()
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   async function bulkCreateVouchers(data: {
     code: string
     durationDays: number
@@ -1036,6 +1075,7 @@ function AdminPanel({
                 onCreate={createAddress}
                 onUpdate={updateAddress}
                 onDelete={deleteAddress}
+                onBulkDelete={bulkDeleteAddresses}
               />
             </TabsContent>
             <TabsContent value="vouchers" className="mt-0">
@@ -1920,6 +1960,7 @@ function AddressesModule({
   onCreate,
   onUpdate,
   onDelete,
+  onBulkDelete,
 }: {
   addresses: AdminAddress[]
   users: AdminUser[]
@@ -1936,12 +1977,42 @@ function AddressesModule({
     }
   ) => Promise<void>
   onDelete: (addressId: string) => Promise<void>
+  onBulkDelete: (addressIds: string[]) => Promise<void>
 }) {
   const defaultExpiry = toDateTimeLocal(
     new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
   )
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const adminSelectClassName =
     "h-8 rounded-lg border border-input bg-background px-2 text-sm text-foreground [color-scheme:dark] dark:bg-input/30 dark:text-foreground"
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const validIds = new Set(addresses.map((address) => address.id))
+      const next = new Set(
+        [...prev].filter((selectedId) => validIds.has(selectedId))
+      )
+
+      return next.size === prev.size ? prev : next
+    })
+  }, [addresses])
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === addresses.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(addresses.map((address) => address.id)))
+    }
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -2034,6 +2105,30 @@ function AddressesModule({
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                className="size-4"
+                checked={
+                  addresses.length > 0 && selectedIds.size === addresses.length
+                }
+                onChange={toggleSelectAll}
+              />
+              <span>Select all</span>
+            </label>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={disabled || selectedIds.size === 0}
+              onClick={() => void onBulkDelete([...selectedIds])}
+            >
+              <TrashIcon data-icon="inline-start" />
+              Delete Selected
+              {selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+            </Button>
+          </div>
           {addresses.map((address) => (
             <AddressRow
               key={address.id}
@@ -2041,6 +2136,8 @@ function AddressesModule({
               users={users}
               domains={domains}
               disabled={disabled}
+              selected={selectedIds.has(address.id)}
+              onToggleSelect={toggleSelect}
               onUpdate={onUpdate}
               onDelete={onDelete}
             />
@@ -2056,6 +2153,8 @@ function AddressRow({
   users,
   domains,
   disabled,
+  selected,
+  onToggleSelect,
   onUpdate,
   onDelete,
 }: {
@@ -2063,6 +2162,8 @@ function AddressRow({
   users: AdminUser[]
   domains: AdminDomain[]
   disabled: boolean
+  selected: boolean
+  onToggleSelect: (addressId: string) => void
   onUpdate: (
     addressId: string,
     payload: {
@@ -2089,22 +2190,40 @@ function AddressRow({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <div className="rounded-lg border p-3">
+      <div
+        className="rounded-lg border p-3"
+        onClick={() => onToggleSelect(address.id)}
+      >
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-2">
-            <code className="truncate text-sm font-medium">
-              {address.address}
-            </code>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <Badge variant="outline">
-                {address.user?.email ?? "Unknown user"}
-              </Badge>
-              <Badge variant="outline">
-                {address.domain?.name ?? "Unknown domain"}
-              </Badge>
-              <Badge variant="secondary">
-                Expires {new Date(address.expiresAt).toLocaleString()}
-              </Badge>
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <div
+              className="pt-0.5"
+              onClick={(event) => {
+                event.stopPropagation()
+              }}
+            >
+              <input
+                type="checkbox"
+                className="size-4"
+                checked={selected}
+                onChange={() => onToggleSelect(address.id)}
+              />
+            </div>
+            <div className="flex min-w-0 flex-col gap-2">
+              <code className="truncate text-sm font-medium">
+                {address.address}
+              </code>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <Badge variant="outline">
+                  {address.user?.email ?? "Unknown user"}
+                </Badge>
+                <Badge variant="outline">
+                  {address.domain?.name ?? "Unknown domain"}
+                </Badge>
+                <Badge variant="secondary">
+                  Expires {new Date(address.expiresAt).toLocaleString()}
+                </Badge>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -2114,7 +2233,10 @@ function AddressRow({
               size="icon-sm"
               aria-label={`Edit ${address.address}`}
               disabled={disabled}
-              onClick={() => setOpen(true)}
+              onClick={(event) => {
+                event.stopPropagation()
+                setOpen(true)
+              }}
             >
               <PencilIcon />
             </Button>
@@ -2124,7 +2246,10 @@ function AddressRow({
               size="icon-sm"
               aria-label={`Delete ${address.address}`}
               disabled={disabled}
-              onClick={() => void onDelete(address.id)}
+              onClick={(event) => {
+                event.stopPropagation()
+                void onDelete(address.id)
+              }}
             >
               <TrashIcon />
             </Button>
