@@ -74,6 +74,31 @@ function serializeAddresses(
   }))
 }
 
+async function buildAddressResponse(
+  userId: string,
+  username: string,
+  address: SerializedAddressRecord,
+  now: Date
+) {
+  const refreshedAddresses = await Address.find({
+    userId,
+    expiresAt: { $gt: now },
+  }).lean()
+
+  return {
+    address: {
+      id: address._id.toString(),
+      address: address.address,
+      domainId: address.domainId.toString(),
+      domainName: address.address.split("@")[1] ?? "",
+      username,
+      createdAt: address.createdAt,
+      expiresAt: address.expiresAt,
+    },
+    activeAddresses: serializeAddresses(refreshedAddresses, username),
+  }
+}
+
 // GET /api/addresses — ambil semua address milik user yang belum expired
 export async function GET() {
   const auth = await getAuthUser()
@@ -224,6 +249,33 @@ export async function POST(req: Request) {
         })
 
         if (conflict) {
+          const isOwnedByCurrentUser =
+            conflict.userId?.toString() === auth.userId
+
+          if (requestedLocalPart && isOwnedByCurrentUser) {
+            const existingAddress = await Address.findOneAndUpdate(
+              { _id: conflict._id, userId: auth.userId },
+              {
+                $set: {
+                  expiresAt,
+                  domainId: domain._id,
+                },
+              },
+              { returnDocument: "after" }
+            ).lean<SerializedAddressRecord | null>()
+
+            if (existingAddress) {
+              return NextResponse.json(
+                await buildAddressResponse(
+                  auth.userId,
+                  slugify(user.name),
+                  existingAddress,
+                  now
+                )
+              )
+            }
+          }
+
           if (requestedLocalPart) {
             return NextResponse.json(
               { error: "Email address is already taken" },
@@ -269,24 +321,11 @@ export async function POST(req: Request) {
     }
     const createdAddress = address
 
-    const refreshedAddresses = await Address.find({
-      userId: auth.userId,
-      expiresAt: { $gt: now },
-    }).lean()
     const username = slugify(user.name)
 
-    return NextResponse.json({
-      address: {
-        id: createdAddress._id.toString(),
-        address: createdAddress.address,
-        domainId: createdAddress.domainId.toString(),
-        domainName: resolvedDomainName,
-        username,
-        createdAt: createdAddress.createdAt,
-        expiresAt: createdAddress.expiresAt,
-      },
-      activeAddresses: serializeAddresses(refreshedAddresses, username),
-    })
+    return NextResponse.json(
+      await buildAddressResponse(auth.userId, username, createdAddress, now)
+    )
   } catch (error) {
     if (isRateLimitError(error)) {
       return NextResponse.json({ error: error.message }, { status: 429 })
