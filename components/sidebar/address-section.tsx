@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { GlobeIcon, PlusIcon, SearchIcon, ShuffleIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -25,6 +25,7 @@ import {
   SidebarMenu,
 } from "@/components/ui/sidebar"
 import { Spinner } from "@/components/ui/spinner"
+import { pickRandomDomains } from "@/lib/domain-list"
 import { buildInboxHref } from "@/lib/inbox"
 import { generateAddress } from "@/services/address.service"
 import { useAddressStore } from "@/stores/address.store"
@@ -47,13 +48,9 @@ function isValidLocalPart(value: string) {
 }
 
 function sortDomains(domains: Domain[]) {
-  return [...domains].sort((first, second) => {
-    const firstOwned = first.isOwnedByUser ? 0 : 1
-    const secondOwned = second.isOwnedByUser ? 0 : 1
-
-    if (firstOwned !== secondOwned) return firstOwned - secondOwned
-    return first.name.localeCompare(second.name)
-  })
+  return [...domains].sort((first, second) =>
+    first.name.localeCompare(second.name)
+  )
 }
 
 function canGenerateFromDomain(domain: Domain) {
@@ -87,7 +84,11 @@ export default function AddressSection({ compact = false }: { compact?: boolean 
   const sorted = [...addresses].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   )
-  const usableDomains = sortDomains(domains.filter(canGenerateFromDomain))
+  const usableDomains = useMemo(
+    () =>
+      sortDomains(pickRandomDomains(domains.filter(canGenerateFromDomain))),
+    [domains]
+  )
   const isGenerating = loadingDomainId !== null
 
   async function handleGenerateAddress(domain: Domain, nextLocalPart = "") {

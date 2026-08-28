@@ -48,3 +48,9 @@ export function rootDomainsOnly<T extends DomainListItem>(domains: T[]) {
     (domain) => normalizeDomain(domain.name) === getRegistrableDomain(domain.name)
   )
 }
+
+export function pickRandomDomains<T>(domains: T[], limit = 5) {
+  return [...domains]
+    .sort(() => Math.random() - 0.5)
+    .slice(0, Math.max(0, limit))
+}

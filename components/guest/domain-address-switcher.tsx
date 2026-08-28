@@ -28,8 +28,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import InboxCtaButton from "@/components/guest/inbox-cta-button"
-import { rootDomainsOnly, uniqueDomainsByName } from "@/lib/domain-list"
-import { resolveDomainSource } from "@/lib/domain-source"
+import {
+  pickRandomDomains,
+  rootDomainsOnly,
+  uniqueDomainsByName,
+} from "@/lib/domain-list"
 import { generateAddress } from "@/services/address.service"
 import { getDomains } from "@/services/domain.service"
 import { useAddressStore } from "@/stores/address.store"
@@ -43,16 +46,9 @@ function isAddressAvailable(address: GeneratedAddress) {
 }
 
 function sortDomains(domains: Domain[]) {
-  return [...domains].sort((first, second) => {
-    const order = { system: 0, user: 1, guest: 2 } as const
-    const firstSource = resolveDomainSource(first)
-    const secondSource = resolveDomainSource(second)
-    if (firstSource !== secondSource) {
-      return order[firstSource] - order[secondSource]
-    }
-
-    return first.name.localeCompare(second.name)
-  })
+  return [...domains].sort((first, second) =>
+    first.name.localeCompare(second.name)
+  )
 }
 
 function getPublicDomains(domains: Domain[]) {
@@ -141,7 +137,7 @@ export default function DomainAddressSwitcher({
   }, [domainsLoaded, setDomains])
 
   const sortedDomains = useMemo(
-    () => sortDomains(getPublicDomains(domains)),
+    () => sortDomains(pickRandomDomains(getPublicDomains(domains))),
     [domains]
   )
   const activeAddress = useMemo(
