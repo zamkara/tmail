@@ -1,3 +1,5 @@
+import { getDomain } from "tldts"
+
 import { normalizeDomain } from "@/lib/domain-validation"
 import { resolveDomainSource } from "@/lib/domain-source"
 import type { DomainSource } from "@/types"
@@ -34,4 +36,15 @@ export function uniqueDomainsByName<T extends DomainListItem>(domains: T[]) {
   }
 
   return Array.from(uniqueDomains.values())
+}
+
+function getRegistrableDomain(domainName: string) {
+  return getDomain(normalizeDomain(domainName)) ?? ""
+}
+
+/** Keep only registrable/root domains, including when the root is not returned. */
+export function rootDomainsOnly<T extends DomainListItem>(domains: T[]) {
+  return domains.filter(
+    (domain) => normalizeDomain(domain.name) === getRegistrableDomain(domain.name)
+  )
 }

@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="feat/TMAIL-${TIMESTAMP}-admin-address-bulk-actions-and-reuse"
+BRANCH_NAME="fix/TMAIL-${TIMESTAMP}-universal-root-domain-filter"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,20 +28,23 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-feat: improve admin address actions and duplicate reuse flow
+fix: hide subdomains from guest and user domain lists
 
 Main changes:
-- let users reuse their own existing address instead of creating a duplicate row when global address uniqueness is disabled and the same manual address is requested again
-- return the refreshed active address list after reuse so the user address sidebar stays deduplicated without adding another address entry
-- add select-all and per-item checkbox controls to `Admin > Addresses` with a bulk `Delete Selected` action matching the Domains workflow
-- keep per-address edit and delete buttons isolated from row selection so address management stays predictable during bulk operations
+- add universal registrable-domain detection with the Public Suffix List through `tldts`
+- hide subdomains from guest and logged-in user domain selectors, including domains such as `aad.rmjhtgiq.web.id`
+- filter domain API responses and system-domain synchronization before domains are stored or displayed
+- normalize persisted browser domain data during Zustand hydration so old subdomains disappear automatically
+- keep admin domain snapshots limited to root domains
+- add the `tldts` dependency and lockfile entry for consistent local and production builds
 
 Testing:
 - [x] `pnpm typecheck`
-- [ ] Verify requesting the same manual address twice with uniqueness `OFF` reuses the existing user address and does not add another address row
-- [ ] Verify requesting the same manual address with uniqueness `ON` still returns `Email address is already taken`
-- [ ] Verify `Admin > Addresses` supports single-select, select-all, and bulk delete with the expected confirmation flow
-- [ ] Verify address edit and delete buttons still work without toggling unexpected selections
+- [x] Verify `aad.rmjhtgiq.web.id` resolves to registrable domain `rmjhtgiq.web.id`
+- [ ] Verify guest domain list hides subdomains after a fresh load
+- [ ] Verify logged-in domain list hides subdomains after refresh and persisted-store hydration
+- [ ] Verify `/api/domains` and admin domain snapshot return root domains only
+- [ ] Verify production build installs `tldts` from `pnpm-lock.yaml`
 EOF
 )
 

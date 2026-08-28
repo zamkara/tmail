@@ -28,7 +28,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import InboxCtaButton from "@/components/guest/inbox-cta-button"
-import { uniqueDomainsByName } from "@/lib/domain-list"
+import { rootDomainsOnly, uniqueDomainsByName } from "@/lib/domain-list"
 import { resolveDomainSource } from "@/lib/domain-source"
 import { generateAddress } from "@/services/address.service"
 import { getDomains } from "@/services/domain.service"
@@ -56,14 +56,14 @@ function sortDomains(domains: Domain[]) {
 }
 
 function getPublicDomains(domains: Domain[]) {
-  return uniqueDomainsByName(
+  return rootDomainsOnly(uniqueDomainsByName(
     domains.filter(
       (domain) =>
         domain.visibility !== "private" &&
         domain.isVerified !== false &&
         domain.isBanned !== true
     )
-  )
+  ))
 }
 
 function findReusableAddress(addresses: GeneratedAddress[], domainId: string) {

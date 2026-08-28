@@ -68,6 +68,9 @@ importers:
       three:
         specifier: ^0.184.0
         version: 0.184.0
+      tldts:
+        specifier: ^7.4.11
+        version: 7.4.11
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
@@ -3820,8 +3823,15 @@ packages:
   tldts-core@7.0.31:
     resolution: {integrity: sha512-wXjKe2IhLUTHnWRmIa7pe+mdsO8IICf+sXb4+zW/8DuI2/pgDiVPqi4DagqzF6/rL/vGQw48k232Fua0Gu81Ug==}
 
+  tldts-core@7.4.11:
+    resolution: {integrity: sha512-CW3WN2rIIE/Of21mulhgnGOwoDyEFNygyIBOONSdyAuSATgMMUCpLeUlB+E8sAwA5xRV9hYPl+kyZ9citHCaKg==}
+
   tldts@7.0.31:
     resolution: {integrity: sha512-bBexVSujxvWzgbBKAXbj+xpe3nBfhGajXEdQ2DGSwZ7+lNlS4yjq7zuc1BmqBXanbf8T4fEBGdbUqbhp/2B3bw==}
+    hasBin: true
+
+  tldts@7.4.11:
+    resolution: {integrity: sha512-aBiNayCfTQxuIJBm06M+xR14cYaYlDlSXZbgsnKzKNxDKUVq7KFwTjwBSsb7m9Y5xO8WfPnBc63WaYFMTGlvqw==}
     hasBin: true
 
   to-regex-range@5.0.1:
@@ -7984,9 +7994,15 @@ snapshots:
 
   tldts-core@7.0.31: {}
 
+  tldts-core@7.4.11: {}
+
   tldts@7.0.31:
     dependencies:
       tldts-core: 7.0.31
+
+  tldts@7.4.11:
+    dependencies:
+      tldts-core: 7.4.11
 
   to-regex-range@5.0.1:
     dependencies:

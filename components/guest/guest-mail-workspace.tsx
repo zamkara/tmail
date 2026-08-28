@@ -45,7 +45,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { uniqueDomainsByName } from "@/lib/domain-list"
+import { rootDomainsOnly, uniqueDomainsByName } from "@/lib/domain-list"
 import { isSupportedBackendDomainStatus } from "@/lib/domain-support"
 import { isValidDomain, normalizeDomain } from "@/lib/domain-validation"
 import { resolveDomainSource } from "@/lib/domain-source"
@@ -218,14 +218,14 @@ async function fetchDomainStatus(domain: string) {
 }
 
 function getPublicDomains(domains: Domain[]) {
-  return uniqueDomainsByName(
+  return rootDomainsOnly(uniqueDomainsByName(
     domains.filter(
       (domain) =>
         domain.visibility !== "private" &&
         domain.isVerified !== false &&
         domain.isBanned !== true
     )
-  )
+  ))
 }
 
 function findMatchingDomain(domainPart: string, domains: Domain[]) {

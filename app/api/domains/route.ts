@@ -5,7 +5,7 @@ import { getAuthUser } from "@/lib/auth"
 import { isAdminRequest } from "@/lib/admin-session"
 import { connectDB, hasMongoConfig } from "@/lib/db"
 import { canSeeDomain } from "@/lib/domain-access"
-import { uniqueDomainsByName } from "@/lib/domain-list"
+import { rootDomainsOnly, uniqueDomainsByName } from "@/lib/domain-list"
 import { isSupportedBackendDomainStatus } from "@/lib/domain-support"
 import { resolveDomainSource } from "@/lib/domain-source"
 import {
@@ -25,19 +25,11 @@ import { getBackendDomainStatus } from "@/services/backend.service"
 
 const UNSUPPORTED_DOMAIN_REASON = "Email backend does not support this domain"
 
-function isNestedSubdomain(domainName: string, allNames: string[]) {
-  return allNames.some(
-    (candidate) =>
-      candidate !== domainName && domainName.endsWith(`.${candidate}`)
-  )
-}
-
 function serializeBackendSystemDomains(domainNames: string[]) {
   const addedAt = new Date().toISOString()
 
-  return domainNames
-    .filter((domainName) => !isNestedSubdomain(domainName, domainNames))
-    .map((domainName) => ({
+  return rootDomainsOnly(domainNames.map((name) => ({ name }))).map(
+    ({ name: domainName }) => ({
       id: `system_${domainName}`,
       name: domainName,
       type: "system",
@@ -48,7 +40,8 @@ function serializeBackendSystemDomains(domainNames: string[]) {
       privateUntil: null,
       isBanned: false,
       isOwnedByUser: false,
-    }))
+    })
+  )
 }
 
 // GET /api/domains — semua domain dibaca dari MongoDB.
@@ -152,18 +145,16 @@ export async function GET() {
       )
     }
 
-    const supportedVisibleDomains = uniqueDomainsByName(
-      visibleDomains.filter((domain) =>
-        supportedOrUnknownNames.has(normalizeDomain(domain.name))
+    const supportedVisibleDomains = rootDomainsOnly(
+      uniqueDomainsByName(
+        visibleDomains.filter((domain) =>
+          supportedOrUnknownNames.has(normalizeDomain(domain.name))
+        )
       )
-    )
-    const visibleDomainNames = supportedVisibleDomains.map(
-      (domain) => domain.name
     )
 
     return NextResponse.json(
       supportedVisibleDomains
-        .filter((domain) => !isNestedSubdomain(domain.name, visibleDomainNames))
         .map((domain) => ({
           id: domain._id.toString(),
           name: domain.name,

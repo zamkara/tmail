@@ -1,7 +1,7 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
 
-import { uniqueDomainsByName } from "@/lib/domain-list"
+import { rootDomainsOnly, uniqueDomainsByName } from "@/lib/domain-list"
 import type { Domain } from "@/types"
 
 interface DomainStore {
@@ -19,16 +19,23 @@ export const useDomainStore = create<DomainStore>()(
       domains: [],
       isLoaded: false,
       setDomains: (domains) =>
-        set({ domains: uniqueDomainsByName(domains), isLoaded: true }),
+        set({
+          domains: rootDomainsOnly(uniqueDomainsByName(domains)),
+          isLoaded: true,
+        }),
       addDomain: (domain) =>
         set((state) => ({
-          domains: uniqueDomainsByName([...state.domains, domain]),
+          domains: rootDomainsOnly(
+            uniqueDomainsByName([...state.domains, domain])
+          ),
         })),
       updateDomain: (domain) =>
         set((state) => ({
-          domains: uniqueDomainsByName(
-            state.domains.map((currentDomain) =>
-              currentDomain.id === domain.id ? domain : currentDomain
+          domains: rootDomainsOnly(
+            uniqueDomainsByName(
+              state.domains.map((currentDomain) =>
+                currentDomain.id === domain.id ? domain : currentDomain
+              )
             )
           ),
         })),
@@ -44,7 +51,7 @@ export const useDomainStore = create<DomainStore>()(
           console.error("Failed to hydrate domain store:", error)
         }
 
-        if (state && !state.isLoaded) {
+        if (state) {
           state.setDomains(state.domains)
         }
       },

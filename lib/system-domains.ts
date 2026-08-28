@@ -1,4 +1,5 @@
 import { Domain } from "@/models/domain.model"
+import { rootDomainsOnly } from "@/lib/domain-list"
 import { isSupportedBackendDomainStatus } from "@/lib/domain-support"
 import {
   buildBackendUrl,
@@ -50,9 +51,11 @@ async function fetchEmailApiSystemDomainCandidates() {
     DOMAIN_FETCH_TIMEOUT_MS
   )
 
-  return uniqueDomainNames(
-    (data.domains ?? []).map((item) => normalizeDomain(item.domain))
-  )
+  return rootDomainsOnly(
+    uniqueDomainNames(
+      (data.domains ?? []).map((item) => normalizeDomain(item.domain))
+    ).map((name) => ({ name }))
+  ).map((domain) => domain.name)
 }
 
 async function fetchEmailApiDomainStatus(name: string) {
