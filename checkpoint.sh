@@ -17,7 +17,7 @@
 
 TIMESTAMP=$(date +"%d%m%y%H%M")
 
-BRANCH_NAME="fix/TMAIL-${TIMESTAMP}-universal-root-domain-filter"
+BRANCH_NAME="fix/TMAIL-${TIMESTAMP}-guest-domain-random-and-inbox-detail"
 
 if git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   git checkout "$BRANCH_NAME"
@@ -28,7 +28,7 @@ fi
 git add -A
 
 COMMIT_MSG=$(cat <<'EOF'
-fix: hide subdomains from guest and user domain lists
+fix: improve guest domain selection and inbox detail behavior
 
 Main changes:
 - add universal registrable-domain detection with the Public Suffix List through `tldts`
@@ -37,12 +37,22 @@ Main changes:
 - normalize persisted browser domain data during Zustand hydration so old subdomains disappear automatically
 - keep admin domain snapshots limited to root domains
 - add the `tldts` dependency and lockfile entry for consistent local and production builds
+- show only five random domains in guest and logged-in domain selectors, sorted alphabetically A-Z
+- choose the initial guest address from a random public domain instead of always using the first domain
+- avoid restoring an unrelated stale guest address when no guest cookie or URL context exists
+- preserve the guest context cookie until the address store has finished hydrating after refresh
+- keep guest email detail open while loading and show the inbox summary if the detail request fails
+- distinguish manual inbox refresh from automatic reloads so marking a message read does not close its detail
 
 Testing:
 - [x] `pnpm typecheck`
 - [x] Verify `aad.rmjhtgiq.web.id` resolves to registrable domain `rmjhtgiq.web.id`
+- [x] Verify the initial guest domain is selected randomly from available public domains
 - [ ] Verify guest domain list hides subdomains after a fresh load
 - [ ] Verify logged-in domain list hides subdomains after refresh and persisted-store hydration
+- [ ] Verify guest and logged-in selectors show at most five domains in A-Z order
+- [ ] Verify clicking a guest message opens its detail and remains open after marking it read
+- [ ] Verify manual guest inbox refresh closes detail, while automatic polling does not
 - [ ] Verify `/api/domains` and admin domain snapshot return root domains only
 - [ ] Verify production build installs `tldts` from `pnpm-lock.yaml`
 EOF

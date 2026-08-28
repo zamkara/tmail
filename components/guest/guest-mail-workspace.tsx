@@ -45,10 +45,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { rootDomainsOnly, uniqueDomainsByName } from "@/lib/domain-list"
+import {
+  pickRandomDomains,
+  rootDomainsOnly,
+  uniqueDomainsByName,
+} from "@/lib/domain-list"
 import { isSupportedBackendDomainStatus } from "@/lib/domain-support"
 import { isValidDomain, normalizeDomain } from "@/lib/domain-validation"
-import { resolveDomainSource } from "@/lib/domain-source"
 import {
   GUEST_EMAIL_COOKIE,
   GUEST_EMAIL_COOKIE_MAX_AGE,
@@ -667,6 +670,9 @@ export default function GuestMailWorkspace({
   useEffect(() => {
     if (typeof document === "undefined") return
     if (user) return
+    // Do not clear the guest context while the persisted address store is
+    // still hydrating after a browser refresh.
+    if (!addressLoaded) return
 
     if (!activeAddress?.address) {
       document.cookie = `${GUEST_EMAIL_COOKIE}=; path=/; max-age=0; SameSite=Lax`
@@ -674,7 +680,7 @@ export default function GuestMailWorkspace({
     }
 
     document.cookie = `${GUEST_EMAIL_COOKIE}=${encodeURIComponent(activeAddress.address)}; path=/; max-age=${GUEST_EMAIL_COOKIE_MAX_AGE}; SameSite=Lax`
-  }, [activeAddress?.address, user])
+  }, [activeAddress?.address, addressLoaded, user])
 
   useEffect(() => {
     if (user) return
@@ -776,6 +782,7 @@ export default function GuestMailWorkspace({
       if (user) return true
 
       return Boolean(
+        hasRequestedEmail &&
         findExactDomain(getAddressDomain(address.address), publicDomains)
       )
     })
@@ -784,16 +791,7 @@ export default function GuestMailWorkspace({
       return
     }
 
-    const firstAvailableDomain = [...publicDomains].sort((first, second) => {
-      const order = { system: 0, user: 1, guest: 2 } as const
-      const firstSource = resolveDomainSource(first)
-      const secondSource = resolveDomainSource(second)
-      if (firstSource !== secondSource) {
-        return order[firstSource] - order[secondSource]
-      }
-
-      return first.name.localeCompare(second.name)
-    })[0]
+    const firstAvailableDomain = pickRandomDomains(publicDomains, 1)[0]
 
     if (!firstAvailableDomain || autoAddressPromiseRef.current) return
 
@@ -838,7 +836,7 @@ export default function GuestMailWorkspace({
   ])
 
   const loadEmails = useCallback(
-    async (silent = false) => {
+    async (silent = false, resetExpanded = false) => {
       if (generateAddressLockRef.current) return
 
       if (!activeAddress) {
@@ -861,6 +859,11 @@ export default function GuestMailWorkspace({
         setEmailDetails({})
         setError(domainAccessMessage)
         return
+      }
+
+      if (!silent && resetExpanded) {
+        setExpandedEmailId(null)
+        setEmailDetails({})
       }
 
       if (!silent) {
@@ -1078,6 +1081,16 @@ export default function GuestMailWorkspace({
     }
 
     setExpandedEmailId(email.id)
+    setEmailDetails((prev) => ({
+      ...prev,
+      [email.id]:
+        prev[email.id] ?? {
+          ...email,
+          bodyHtml: null,
+          bodyText: email.snippet,
+          headers: {},
+        },
+    }))
     setLoadingDetailId(email.id)
 
     if (!emailDetails[email.id]) {
@@ -1104,7 +1117,17 @@ export default function GuestMailWorkspace({
           )
         )
       } catch {
-        setExpandedEmailId(null)
+        // Keep the message open and show its summary if the detail request
+        // temporarily fails or times out.
+        setEmailDetails((prev) => ({
+          ...prev,
+          [email.id]: {
+            ...email,
+            bodyHtml: null,
+            bodyText: email.snippet,
+            headers: {},
+          },
+        }))
       } finally {
         setLoadingDetailId(null)
       }
@@ -1475,7 +1498,7 @@ export default function GuestMailWorkspace({
                 isLoading ||
                 isDeletingMessages
               }
-              onClick={() => void loadEmails()}
+              onClick={() => void loadEmails(false, true)}
             >
               {isLoading ? <Spinner /> : <RefreshCwIcon />}
             </Button>
@@ -1786,11 +1809,13 @@ function EmailDetailContent({
   detail: EmailDetail | undefined
   isLoading: boolean
 }) {
-  if (isLoading) {
-    return null
+  if (!detail) {
+    return isLoading ? (
+      <div className="border-t px-6 py-5 text-sm text-muted-foreground">
+        Loading message...
+      </div>
+    ) : null
   }
-
-  if (!detail) return null
 
   const senderName = detail.from.name ?? detail.from.email
 
