@@ -14,15 +14,9 @@ import { Domain } from "@/models/domain.model"
 import { User } from "@/models/user.model"
 import { Voucher } from "@/models/voucher.model"
 import { resolveDomainSource } from "@/lib/domain-source"
+import { rootDomainsOnly } from "@/lib/domain-list"
 
 export const dynamic = "force-dynamic"
-
-function isNestedSubdomain(domainName: string, allNames: string[]) {
-  return allNames.some(
-    (candidate) =>
-      candidate !== domainName && domainName.endsWith(`.${candidate}`)
-  )
-}
 
 export async function GET(req: Request) {
   try {
@@ -97,10 +91,7 @@ export async function GET(req: Request) {
       getAdminSettings(),
     ])
 
-    const allDomainNames = allDomains.map((domain) => domain.name)
-    const domains = allDomains.filter(
-      (domain) => !isNestedSubdomain(domain.name, allDomainNames)
-    )
+    const domains = rootDomainsOnly(allDomains)
     const totalDomains = domains.length
 
     const ownerIds = domains
