@@ -6,6 +6,7 @@ import { buildBackendUrl, getBackendBaseUrl } from "@/services/backend.service"
 
 const BASE = getBackendBaseUrl()
 const INBOX_TIMEOUT_MS = Number(process.env.EMAIL_API_TIMEOUT_MS ?? 5000)
+const INBOX_ATTEMPTS = 3
 export const dynamic = "force-dynamic"
 
 async function fetchWithTimeout(input: URL, init: RequestInit = {}) {
@@ -20,6 +21,29 @@ async function fetchWithTimeout(input: URL, init: RequestInit = {}) {
   } finally {
     clearTimeout(timeout)
   }
+}
+
+async function fetchWithRetry(input: URL, init: RequestInit = {}) {
+  let lastError: unknown = null
+
+  for (let attempt = 1; attempt <= INBOX_ATTEMPTS; attempt += 1) {
+    try {
+      const res = await fetchWithTimeout(input, init)
+      if (res.ok || res.status < 500 || attempt === INBOX_ATTEMPTS) {
+        return res
+      }
+      lastError = new Error(`Email API returned status ${res.status}`)
+    } catch (error) {
+      lastError = error
+      if (attempt === INBOX_ATTEMPTS) throw error
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 200 * attempt))
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Email API request failed")
 }
 
 export async function GET(req: Request) {
@@ -70,7 +94,7 @@ export async function GET(req: Request) {
   target.searchParams.set("email", address)
 
   try {
-    const res = await fetchWithTimeout(target, {
+    const res = await fetchWithRetry(target, {
       cache: "no-store",
     })
     const data = await res.json().catch(() => null)

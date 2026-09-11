@@ -2,6 +2,7 @@ import type { Domain } from "@/types"
 import type { AuthUser } from "@/services/auth.service"
 
 const DOMAIN_REQUEST_TIMEOUT_MS = 8000
+const DOMAIN_REQUEST_ATTEMPTS = 3
 
 async function readError(res: Response) {
   const data = (await res.json().catch(() => null)) as { error?: string } | null
@@ -29,15 +30,34 @@ async function fetchWithTimeout(
 }
 
 export async function getDomains(): Promise<Domain[]> {
-  const res = await fetchWithTimeout("/api/domains", {
-    cache: "no-store",
-  })
+  let lastError: unknown = null
 
-  if (!res.ok) {
-    throw new Error(await readError(res))
+  for (let attempt = 1; attempt <= DOMAIN_REQUEST_ATTEMPTS; attempt += 1) {
+    try {
+      const res = await fetchWithTimeout("/api/domains", {
+        cache: "no-store",
+      })
+
+      if (!res.ok) {
+        throw new Error(await readError(res))
+      }
+
+      const data = await res.json()
+      if (!Array.isArray(data)) {
+        throw new Error("Invalid domains response")
+      }
+      return data as Domain[]
+    } catch (error) {
+      lastError = error
+      if (attempt < DOMAIN_REQUEST_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, 250 * attempt))
+      }
+    }
   }
 
-  return res.json()
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Failed to load domains")
 }
 
 export async function addDomain(name: string): Promise<Domain> {
